@@ -192,49 +192,48 @@ def parse_report(html: str, url: str) -> Report:
 
 # ---------- discovery ----------
 
-def discover(report_type: str, since: date, max_pages: int = 60) -> list[str]:
-    """Report URLs from the category listing; falls back to slug guessing per Sunday."""
-    # Crawl the county's article listing to find report URLs; if that listing is blocked or noisy,
-    # fall back to guessing common slug patterns for each Sunday issue.
-    urls: list[str] = []
-    try:
-        for page in range(1, max_pages + 1):
-            r = http.get(f"{LISTING[report_type]}&page={page}")
-            if r.status_code != 200:
-                break
-            soup = BeautifulSoup(r.text, "lxml")
-            found = []
-            for a in soup.find_all("a", href=True):
-                href = urljoin(BASE, a["href"])
-                m = re.search(r"/News-articles/(\d{8})-", href)
-                if m and href not in urls and href not in found:
-                    found.append(href)
-            if not found:
-                break
-            urls.extend(found)
-            oldest = min(datetime.strptime(re.search(r"/(\d{8})-", u).group(1), "%Y%m%d").date()
-                         for u in found)
-            if oldest < since:
-                break
-    except (http.RobotsDisallowed, requests.RequestException) as e:
-        log.warning("listing unavailable (%s); falling back to slug guessing", e)
+def _slug_date(url: str) -> date:
+    return datetime.strptime(re.search(r"/(\d{8})-", url).group(1), "%Y%m%d").date()
 
-    if not urls:
-        urls = _guess(report_type, since)
-    keep = [u for u in urls
-            if datetime.strptime(re.search(r"/(\d{8})-", u).group(1), "%Y%m%d").date() >= since]
-    # Listing can mix categories if the filter is ignored; the URL slug tells us whether the page is
-    # residential or commercial before we return the final set.
+
+def discover(report_type: str, since: date, max_misses: int = 4) -> list[str]:
+    """Report URLs: the listing's first page, then slug guessing for older weeks.
+
+    The listing shows only the newest 10 reports; its paging is an ASP.NET postback, so a
+    &page= parameter is ignored. Older weeks are found by guessing slugs week by week until
+    `since`, or until `max_misses` weeks in a row have no page (the county keeps ~30 weeks).
+    """
+    # Listing can mix categories if the filter is ignored; the slug says which type a page is.
     tag = "WCSR|Commercial" if report_type == "commercial" else "WHSR|Residential|Home"
-    return sorted({u for u in keep if re.search(tag, u, re.I)})
+    urls: set[str] = set()
+    try:
+        r = http.get(LISTING[report_type])
+        if r.status_code == 200:
+            for a in BeautifulSoup(r.text, "lxml").find_all("a", href=True):
+                href = urljoin(BASE, a["href"])
+                if re.search(r"/News-articles/\d{8}-", href) and re.search(tag, href, re.I):
+                    urls.add(href)
+        else:
+            log.warning("listing returned HTTP %s; using slug guessing only", r.status_code)
+    except (http.RobotsDisallowed, requests.RequestException) as e:
+        log.warning("listing unavailable (%s); using slug guessing only", e)
+
+    before = min((_slug_date(u) for u in urls), default=None)
+    urls |= set(_guess(report_type, since, before, max_misses))
+    return sorted(u for u in urls if _slug_date(u) >= since)
 
 
-def _guess(report_type: str, since: date) -> list[str]:
-    # Some weeks do not appear in the listing, so try the most likely URL slugs directly and scan back
-    # in weekly intervals until we reach the requested cutoff date.
-    out, d = [], date.today()
-    d -= timedelta(days=(d.weekday() + 1) % 7)  # back to Sunday
-    while d >= since:
+def _guess(report_type: str, since: date, before: date | None = None,
+           max_misses: int = 4) -> list[str]:
+    # Try likely slugs for each Sunday older than `before` (default: this week), stopping at
+    # `since` or after `max_misses` consecutive weeks with no page.
+    out = []
+    if before:
+        d = before - timedelta(days=7 + (before.weekday() + 1) % 7)
+    else:
+        d = date.today() - timedelta(days=(date.today().weekday() + 1) % 7)  # back to Sunday
+    misses = 0
+    while d >= since and misses < max_misses:
         for pat in SLUG_GUESSES[report_type]:
             # Publication sometimes slips a day; try Sun and Sat/Mon.
             for shift in (0, -1, 1):
@@ -250,7 +249,15 @@ def _guess(report_type: str, since: date) -> list[str]:
             else:
                 continue
             break
+        else:
+            misses += 1
+            d -= timedelta(days=7)
+            continue
+        misses = 0
         d -= timedelta(days=7)
+    if misses >= max_misses:
+        log.info("%s: no page for %s weeks in a row before %s; stopping", report_type, misses,
+                 d + timedelta(days=7 * (misses + 1)))
     return out
 
 
@@ -277,7 +284,11 @@ def load(con, rep: Report) -> int:
 def run(con, since: date, report_types=("residential",), refetch=False) -> dict:
     # Execute the full Franklin County weekly pipeline: discover URLs, fetch each report, parse sales,
     # and load them into SQL Server while tracking simple stats about what was new or skipped.
-    done = {r[0] for r in con.execute("SELECT report_url FROM auditor_report")}
+    # Skip a report only if it is loaded AND its raw page is saved, so reports loaded before
+    # raw_page existed get fetched once more to capture their HTML.
+    done = {r[0] for r in con.execute(
+        "SELECT report_url FROM auditor_report a WHERE EXISTS "
+        "(SELECT 1 FROM raw_page p WHERE p.url = a.report_url)")}
     stats = {"reports": 0, "new_rows": 0, "skipped": 0}
     for rt in report_types:
         for url in discover(rt, since):
@@ -294,8 +305,29 @@ def run(con, since: date, report_types=("residential",), refetch=False) -> dict:
             if r.status_code != 200:
                 log.warning("HTTP %s for %s", r.status_code, url)
                 continue
+            # Save the page before parsing, so a parser crash still keeps the raw HTML.
+            db.save_raw(con, url, r.text, r.status_code)
+            con.commit()
             rep = parse_report(r.text, url)
             stats["new_rows"] += load(con, rep)
             stats["reports"] += 1
             log.info("%s: %s rows (%s to %s)", url, len(rep.sales), rep.period_start, rep.period_end)
+    return stats
+
+
+def reparse(con) -> dict:
+    """Re-parse the latest saved copy of every Franklin report page and load it.
+
+    Use after a parser fix. Adds sales the old parser missed and refreshes each report's
+    summary row; sales already stored are not changed or removed.
+    """
+    stats = {"reports": 0, "new_rows": 0}
+    pages = con.execute(
+        "SELECT url, content FROM (SELECT url, content, ROW_NUMBER() OVER "
+        "(PARTITION BY url ORDER BY fetched_at DESC, id DESC) AS rn FROM raw_page "
+        "WHERE http_status = 200 AND url LIKE ?) x WHERE rn = 1 ORDER BY url",
+        BASE + "/%").fetchall()
+    for url, content in pages:
+        stats["new_rows"] += load(con, parse_report(content, url))
+        stats["reports"] += 1
     return stats

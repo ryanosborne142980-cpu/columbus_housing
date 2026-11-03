@@ -3,6 +3,7 @@
   python run.py auditor --since 2025-10-01            # backfill/incremental Franklin weekly sales
   python run.py county-file --county Delaware --file x.csv   # Delaware/Licking sales export
   python run.py redfin  [--file path | --url url]     # Redfin weekly metro tracker
+  python run.py reparse                             # re-parse saved raw pages after a parser fix
   python run.py report  [--export out/]               # trend summary (+ CSV export)
   python run.py all     --since 2025-10-01            # auditor + redfin + report
 """
@@ -66,7 +67,7 @@ def report(con, export: str | None) -> None:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("cmd", choices=["auditor", "county-file", "redfin", "report", "all"])
+    p.add_argument("cmd", choices=["auditor", "reparse", "county-file", "redfin", "report", "all"])
     p.add_argument("--county", choices=county_file.COUNTIES, help="county for county-file")
     p.add_argument("--db", default=db.DEFAULT_DB, help="SQL Server database name")
     p.add_argument("--server", default=db.DEFAULT_SERVER, help="SQL Server instance")
@@ -84,6 +85,8 @@ def main(argv=None) -> int:
     if a.cmd in ("auditor", "all"):
         types = ("residential", "commercial") if a.commercial else ("residential",)
         print("auditor:", auditor.run(con, a.since, types, a.refetch))
+    if a.cmd == "reparse":
+        print("reparse:", auditor.reparse(con))
     if a.cmd == "county-file":
         if not (a.county and a.file):
             p.error("county-file needs --county and --file")

@@ -22,7 +22,7 @@ def _con():
 def con(_con):
     # Empty every table so each test starts clean.
     _con.execute(f"DROP TABLE IF EXISTS {redfin.TABLE}")
-    for t in ("auditor_sale", "auditor_report", "redfin_load_log"):
+    for t in ("auditor_sale", "auditor_report", "redfin_load_log", "raw_page"):
         _con.execute(f"DELETE FROM {t}")
     _con.commit()
     return _con
@@ -129,8 +129,11 @@ def test_county_file_maps_columns_and_filters_residential(con):
 def test_county_file_missing_columns_lists_headers(tmp_path):
     bad = tmp_path / "bad.csv"
     bad.write_text("Parcel,Amount Due\n1,2\n")
-    with pytest.raises(ValueError, match="sale_date"):
+    with pytest.raises(ValueError) as e:
         county_file.parse(bad)
+    msg = str(e.value)
+    assert "sale_date" in msg and "sale_price" in msg  # names every missing field
+    assert "'parcel'" in msg and "'amount_due'" in msg  # lists the file's headers
 
 
 def test_redfin_keeps_columbus_metro_and_three_counties(con):
@@ -139,3 +142,41 @@ def test_redfin_keeps_columbus_metro_and_three_counties(con):
     names = {x[0] for x in con.execute(f"SELECT region_name FROM {redfin.TABLE}")}
     assert names == {"Columbus, OH metro area", "Franklin County, OH", "Delaware County, OH",
                      "Licking County, OH"}
+
+
+def test_raw_page_dedupes_and_reparse_loads(con):
+    html = (FX / "whsr.html").read_text()
+    url = auditor.BASE + "/News-articles/20261101-WHSR"
+    assert db.save_raw(con, url, html, 200) is True
+    assert db.save_raw(con, url, html, 200) is False  # same content: no new row
+    assert db.save_raw(con, url, html + "<!-- edited -->", 200) is True  # changed: kept as a revision
+    con.commit()
+    assert auditor.reparse(con) == {"reports": 1, "new_rows": 6}
+    assert auditor.reparse(con) == {"reports": 1, "new_rows": 0}
+
+
+class _Resp:
+    def __init__(self, status, text=""):
+        self.status_code, self.text = status, text
+
+
+def test_discover_guesses_past_listing_and_stops_after_misses(monkeypatch):
+    listing = ('<a href="/News-articles/20261101-WHSR">a</a>'
+               '<a href="/News-articles/20261025-WHSR">b</a>'
+               '<a href="/News-articles/20261025-WCSR">commercial, wrong type</a>')
+    live = {"20261018-WHSR", "20261010-WHSR"}  # second one published a day early (Saturday)
+    calls = []
+
+    def fake_get(url, **kw):
+        calls.append(url)
+        if url == auditor.LISTING["residential"]:
+            return _Resp(200, listing)
+        return _Resp(200 if url.rsplit("/", 1)[1] in live else 404)
+
+    monkeypatch.setattr(auditor.http, "get", fake_get)
+    got = auditor.discover("residential", date(2026, 1, 1), max_misses=2)
+    assert [u.rsplit("/", 1)[1] for u in got] == [
+        "20261010-WHSR", "20261018-WHSR", "20261025-WHSR", "20261101-WHSR"]
+    # Listing once; then two weeks found; then 2 dead weeks x 3 slugs x 3 day shifts, then stop.
+    assert not any("page=" in u for u in calls)
+    assert len(calls) == 1 + 1 + 2 + 2 * 9

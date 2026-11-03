@@ -1,4 +1,26 @@
 -- Landed tables. Each is created only if missing, so existing data is kept.
+--
+-- Layers:
+--   raw      raw_page (fetched HTML, kept verbatim), plus county export files and the Redfin file
+--   cleaned  auditor_report / auditor_sale (parsed), redfin_columbus_weekly, v_sale_clean
+--   summary  v_county_week, v_county_rolling4, v_zip_month (sql/views.sql)
+-- Franklin report pages drop off the county site after ~30 weeks, so raw_page is the only
+-- way to re-parse an old week after a parser fix (python run.py reparse).
+
+-- Every fetched report page, verbatim. A refetch adds a row only if the content changed.
+IF OBJECT_ID('dbo.raw_page', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.raw_page (
+        id INT IDENTITY PRIMARY KEY,
+        url NVARCHAR(450) NOT NULL,
+        http_status INT NOT NULL,
+        content_sha256 CHAR(64) NOT NULL,
+        content NVARCHAR(MAX) NOT NULL,
+        fetched_at DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME()
+    );
+    CREATE UNIQUE INDEX ux_raw_page ON dbo.raw_page (url, content_sha256);
+END
+GO
 
 -- One row per fetched report page or loaded county file.
 IF OBJECT_ID('dbo.auditor_report', 'U') IS NULL

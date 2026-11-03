@@ -8,6 +8,7 @@ database/tables/views if missing and prints each table's row count.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import os
 import re
 from pathlib import Path
@@ -97,6 +98,17 @@ def insert_new_sales(con: pyodbc.Connection, rows: list[dict]) -> int:
     n = cur.rowcount
     cur.execute("DROP TABLE #stage")
     return n
+
+
+def save_raw(con: pyodbc.Connection, url: str, content: str, status: int) -> bool:
+    """Store a fetched page verbatim unless identical content is already stored. Caller commits.
+    Returns True if a new row was added."""
+    sha = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    cur = con.execute(
+        "INSERT INTO raw_page (url, http_status, content_sha256, content) SELECT ?, ?, ?, ? "
+        "WHERE NOT EXISTS (SELECT 1 FROM raw_page WHERE url = ? AND content_sha256 = ?)",
+        url, status, sha, content, url, sha)
+    return cur.rowcount == 1
 
 
 def upsert_report(con: pyodbc.Connection, row: dict) -> None:
