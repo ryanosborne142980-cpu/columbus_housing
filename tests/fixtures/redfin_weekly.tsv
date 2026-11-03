@@ -1,0 +1,9 @@
+region_id	region_type	region_name	period_begin	period_end	duration	median_sale_price	inventory	pending_sales	new_listings	median_days_on_market
+1	metro	Columbus, OH metro area	2026-09-28	2026-10-25	4 weeks	315000	5200	2100	2300	24
+1	metro	Columbus, OH metro area	2026-09-21	2026-10-18	4 weeks	318000	5150	2150	2350	23
+2	metro	Columbus, GA metro area	2026-09-28	2026-10-25	4 weeks	240000	1200	400	450	40
+3	metro	Cleveland, OH metro area	2026-09-28	2026-10-25	4 weeks	230000	6000	2500	2600	30
+4	county	Franklin County, OH	2026-09-28	2026-10-25	4 weeks	330000	2900	1200	1300	22
+5	county	Delaware County, OH	2026-09-28	2026-10-25	4 weeks	520000	700	300	320	28
+6	county	Licking County, OH	2026-09-28	2026-10-25	4 weeks	310000	500	210	230	26
+7	county	Delaware County, PA	2026-09-28	2026-10-25	4 weeks	400000	900	400	420	20
