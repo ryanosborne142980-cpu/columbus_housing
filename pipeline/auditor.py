@@ -240,7 +240,7 @@ def _guess(report_type: str, since: date, before: date | None = None,
                 url = f"{BASE}/News-articles/{pat.format(d=(d + timedelta(days=shift)).strftime('%Y%m%d'))}"
                 try:
                     ok = http.get(url).status_code == 200
-                except requests.RequestException as e:
+                except (requests.RequestException, http.RobotsDisallowed) as e:
                     log.error("site unreachable (%s); aborting discovery", e)
                     return out
                 if ok:
@@ -297,7 +297,7 @@ def run(con, since: date, report_types=("residential",), refetch=False) -> dict:
                 continue
             try:
                 r = http.get(url)
-            except requests.RequestException as e:
+            except (requests.RequestException, http.RobotsDisallowed) as e:
                 log.warning("fetch failed %s: %s", url, e)
                 stats.setdefault("failed", 0)
                 stats["failed"] += 1

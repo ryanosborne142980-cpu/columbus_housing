@@ -22,8 +22,10 @@ applied automatically: `sql/schema.sql` only creates missing tables, while views
 
 ## Run
 ```bash
-# Fill the historical Franklin County sales data needed for year-over-year comparisons.
-python run.py auditor --since 2024-10-01      # backfill 2 yrs (needed for YoY); incremental after
+# Load every Franklin County report still online (the county keeps ~30 weeks).
+python run.py auditor --since 2024-10-01      # backfill; stops when weeks run out; incremental after
+# Re-parse saved raw pages after a parser fix (no network).
+python run.py reparse
 # Import a Delaware county sales export from a local Excel or CSV file.
 python run.py county-file --county Delaware --file sales.xlsx   # CSV, TSV, .xls or .xlsx
 # Download or import the Redfin market-tracker dataset for leading indicators.
@@ -50,6 +52,7 @@ Re-runs are idempotent: loaded reports are skipped, and sales are keyed on count
 - `v_report_validation`: parsed rows vs the county's own count. Non-zero `diff` means the parser has drifted.
 
 ## Known limits
+- **Franklin reports stay online only ~30 weeks.** Every fetched page is saved verbatim in `raw_page`, so old weeks can be re-parsed after they disappear. Run the weekly job without gaps: a missed week is lost for good, and Franklin YoY needs a full year of captured weeks.
 - **Delaware and Licking are manual and only as fresh as your last file.** Their YoY needs two years of history in the export. Fairfield, Union, Madison and Pickaway are still missing.
 - **No property attributes** (sqft, beds, year built), so medians move with mix shift. Treat moves under ~3% as noise until you enrich via parcel lookup.
 - **The $10k floor is a proxy** for arm's-length sales. It doesn't catch below-market related-party sales or bulk/portfolio deals.

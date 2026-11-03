@@ -43,6 +43,17 @@ code handles the format we expect; they do not prove the live sources still look
   adds 6 sales; the second adds none. It also checks that the parsed sale count matches the county's
   own count, which is how parser drift gets spotted on live data.
 
+- **test_raw_page_dedupes_and_reparse_loads**: Saves a report page three times. An identical copy adds
+  nothing; a changed copy is kept as a revision. Re-parsing from the saved pages loads 6 sales the first
+  time and none the second.
+
+### Finding report pages (offline)
+
+- **test_discover_guesses_past_listing_and_stops_after_misses**: Fakes the county site. Checks that
+  discovery reads the listing once (no `&page=` requests, which the site ignores), drops a commercial
+  link, finds older weeks by guessing addresses (including one published a day early), and stops after
+  the set number of weeks in a row with no page.
+
 ### Summary views
 
 - **test_clean_view_drops_nominal_and_collapses_multiparcel**: Checks the cleaning rules. A $10 transfer
@@ -69,10 +80,18 @@ code handles the format we expect; they do not prove the live sources still look
 - **test_redfin_keeps_columbus_metro_and_three_counties**: Loads the sample Redfin file and checks that
   only the Columbus metro rows and the Franklin, Delaware and Licking county rows (all Ohio) are kept.
 
+### Polite fetching (offline, fake network)
+
+- **test_http_blocked_robots_means_disallow**: A robots.txt that answers 403 blocks the site. One that
+  answers 503 blocks for now but is checked again on the next request.
+- **test_http_crawl_delay_and_retry_after**: A site with `Crawl-delay: 10` is fetched at most every 10
+  seconds, and a 429 with `Retry-After: 7` waits 7 seconds and retries.
+
 ## Not covered
 
-- Finding report pages on the county website (`discover`, `_guess`) and the full `run`, because they
-  need the network.
+- Discovery against the real county website and the full `run`, because they need the network. The
+  offline discovery test uses a fake site, so it won't notice if the county changes its address
+  pattern.
 - The printed report from `run.py report`.
 - Real pages and files. Saving one real Franklin report page into `fixtures/` and adding a test for it
   is the next most useful test to write.

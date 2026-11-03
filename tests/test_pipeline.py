@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeline import auditor, county_file, db, redfin
+from pipeline import auditor, county_file, db, http, redfin
 
 FX = Path(__file__).parent / "fixtures"
 
@@ -180,3 +180,41 @@ def test_discover_guesses_past_listing_and_stops_after_misses(monkeypatch):
     # Listing once; then two weeks found; then 2 dead weeks x 3 slugs x 3 day shifts, then stop.
     assert not any("page=" in u for u in calls)
     assert len(calls) == 1 + 1 + 2 + 2 * 9
+
+
+class _HResp:
+    def __init__(self, status, text="", headers=None):
+        self.status_code, self.text, self.headers = status, text, headers or {}
+        self.ok = status < 400
+
+
+@pytest.fixture
+def fake_net(monkeypatch):
+    """Route http's session to a dict of url -> list of responses; record sleeps."""
+    routes, sleeps = {}, []
+    monkeypatch.setattr(http, "_robots", {})
+    monkeypatch.setattr(http, "_last_hit", {})
+    monkeypatch.setattr(http.time, "sleep", sleeps.append)
+    monkeypatch.setattr(http._session, "get", lambda url, **kw: routes[url].pop(0))
+    return routes, sleeps
+
+
+def test_http_blocked_robots_means_disallow(fake_net):
+    routes, _ = fake_net
+    routes["https://a.test/robots.txt"] = [_HResp(403)]
+    with pytest.raises(http.RobotsDisallowed):
+        http.get("https://a.test/page")
+    routes["https://b.test/robots.txt"] = [_HResp(503), _HResp(404)]
+    with pytest.raises(http.RobotsDisallowed):  # server error: refuse now...
+        http.get("https://b.test/page")
+    routes["https://b.test/page"] = [_HResp(200)]
+    assert http.get("https://b.test/page").status_code == 200  # ...but retry robots later
+
+
+def test_http_crawl_delay_and_retry_after(fake_net):
+    routes, sleeps = fake_net
+    routes["https://c.test/robots.txt"] = [_HResp(200, "User-agent: *\nCrawl-delay: 10\n")]
+    routes["https://c.test/p"] = [_HResp(429, headers={"Retry-After": "7"}), _HResp(200)]
+    assert http.get("https://c.test/p").status_code == 200
+    assert 7.0 in sleeps                    # honored Retry-After
+    assert any(s > 9 for s in sleeps if s != 7.0)  # throttled to Crawl-delay, not 2s
