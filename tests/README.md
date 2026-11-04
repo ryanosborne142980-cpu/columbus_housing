@@ -21,6 +21,7 @@ code handles the format we expect; they do not prove the live sources still look
 | `whsr.html` | A Franklin County weekly residential sales report page | Sales split across two ZIP tables, plus the county's own summary numbers |
 | `wcsr.html` | A Franklin County weekly commercial sales report page | A ZIP given only in the table caption, and a week that runs from December into January |
 | `delaware_sales.csv` | A Delaware County sales export | Owner mailing addresses in a different ZIP, a commercial sale, and a row with no sale date |
+| `zillow_county.csv`, `zillow_zip.csv` | Zillow's monthly ZHVI files | Same-named counties in other states, a blank month |
 | `redfin_weekly.tsv` | Redfin's weekly market file | Look-alike regions that must be dropped: Columbus, GA; Cleveland, OH; Delaware County, PA |
 
 ## What each test checks
@@ -34,7 +35,8 @@ code handles the format we expect; they do not prove the live sources still look
   recognized as commercial, that a week from Dec 26 to Jan 1 gets the right year on each end, and that
   the ZIP is picked up from the table caption.
 - **test_parse_period_month_abbreviations**: Checks that report weeks written as "Sept.", "Sep." or
-  "September" all read correctly, and that an unrecognizable month name leaves the week blank instead
+  "September" all read correctly, that older pages with no year ("Apr. 3–9") take the year from the
+  publish date, that dashed dates ("04-03-2026") read, and that an unrecognizable month name leaves the week blank instead
   of stopping the run.
 
 ### Saving to the database
@@ -79,6 +81,9 @@ code handles the format we expect; they do not prove the live sources still look
 
 - **test_redfin_keeps_columbus_metro_and_three_counties**: Loads the sample Redfin file and checks that
   only the Columbus metro rows and the Franklin, Delaware and Licking county rows (all Ohio) are kept.
+- **test_redfin_gzip_read_in_chunks**: Loads a gzipped copy with no `.gz` in the name, read 3 rows at a
+  time, and checks the same 5 rows come through with numbers intact. Real files cover the whole US, so
+  they are filtered chunk by chunk instead of loaded whole.
 
 ### Polite fetching (offline, fake network)
 
@@ -86,6 +91,15 @@ code handles the format we expect; they do not prove the live sources still look
   answers 503 blocks for now but is checked again on the next request.
 - **test_http_crawl_delay_and_retry_after**: A site with `Crawl-delay: 10` is fetched at most every 10
   seconds, and a 429 with `Retry-After: 7` waits 7 seconds and retries.
+
+### Zillow
+
+- **test_zillow_keeps_three_ohio_counties_and_their_zips**: Loads sample Zillow county and ZIP files.
+  Keeps only the Ohio Franklin, Delaware and Licking rows and their ZIPs (drops Franklin County, PA, a
+  Massachusetts ZIP in a "Franklin County", Cuyahoga and Columbus, GA). Checks year-over-year (7.5%),
+  that a reload replaces rather than duplicates, and that each load logs the Zillow attribution.
+- **test_zillow_skips_download_when_file_unchanged**: With a fake network, a second load sees the same
+  Last-Modified date and skips the download.
 
 ## Not covered
 

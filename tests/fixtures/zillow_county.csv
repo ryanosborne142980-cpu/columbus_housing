@@ -1,0 +1,6 @@
+RegionID,SizeRank,RegionName,RegionType,StateName,State,Metro,StateCodeFIPS,MunicipalCodeFIPS,2025-09-30,2025-10-31,2026-09-30,2026-10-31
+1,10,Franklin County,county,OH,OH,"Columbus, OH",39,049,280000,281000,300000,302000
+2,20,Delaware County,county,OH,OH,"Columbus, OH",39,041,500000,,525000,530000
+3,30,Licking County,county,OH,OH,"Columbus, OH",39,089,290000,291000,301000,303000
+4,40,Franklin County,county,PA,PA,"Chambersburg, PA",42,055,250000,251000,260000,261000
+5,50,Cuyahoga County,county,OH,OH,"Cleveland, OH",39,035,200000,201000,210000,211000

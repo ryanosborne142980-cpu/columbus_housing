@@ -1,0 +1,5 @@
+RegionID,SizeRank,RegionName,RegionType,StateName,State,City,Metro,CountyName,2025-09-30,2025-10-31,2026-09-30,2026-10-31
+11,1,43215,zip,OH,OH,Columbus,"Columbus, OH",Franklin County,250000,252000,260000,262000
+12,2,43035,zip,OH,OH,Lewis Center,"Columbus, OH",Delaware County,450000,451000,470000,472000
+13,3,31901,zip,GA,GA,Columbus,"Columbus, GA",Muscogee County,150000,151000,155000,156000
+14,4,1001,zip,MA,MA,Agawam,"Springfield, MA",Franklin County,300000,301000,310000,311000

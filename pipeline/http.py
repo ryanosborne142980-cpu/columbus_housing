@@ -66,6 +66,15 @@ def _retry_after(r: requests.Response, attempt: int) -> float:
 def get(url: str, *, timeout: int = 60, check_robots: bool = True) -> requests.Response:
     """GET with robots, throttle and backoff. Returns any final status (callers check it:
     discovery relies on 404s coming back as responses)."""
+    return _request("GET", url, timeout, check_robots)
+
+
+def head(url: str, *, timeout: int = 60, check_robots: bool = True) -> requests.Response:
+    """HEAD with the same rules as get(); use to check Last-Modified before a big download."""
+    return _request("HEAD", url, timeout, check_robots)
+
+
+def _request(method: str, url: str, timeout: int, check_robots: bool) -> requests.Response:
     interval = MIN_INTERVAL_SEC
     if check_robots:
         rp = _robots_for(url)
@@ -75,7 +84,7 @@ def get(url: str, *, timeout: int = 60, check_robots: bool = True) -> requests.R
     host = urlparse(url).netloc
     for attempt in range(MAX_RETRIES + 1):
         _throttle(host, interval)
-        r = _session.get(url, timeout=timeout)
+        r = _session.request(method, url, timeout=timeout)
         if r.status_code not in (429, 503) or attempt == MAX_RETRIES:
             return r
         time.sleep(_retry_after(r, attempt))

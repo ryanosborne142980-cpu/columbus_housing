@@ -2,8 +2,9 @@
 
   python run.py auditor --since 2025-10-01            # backfill/incremental Franklin weekly sales
   python run.py county-file --county Delaware --file x.csv   # Delaware/Licking sales export
-  python run.py redfin  [--file path | --url url]     # Redfin weekly metro tracker
+  python run.py redfin  --file path [| --url url]     # Redfin weekly tracker (manual download)
   python run.py reparse                             # re-parse saved raw pages after a parser fix
+  python run.py zillow  [--kind county|zip] [--file path | --url url]   # monthly; skips unchanged files
   python run.py report  [--export out/]               # trend summary (+ CSV export)
   python run.py all     --since 2025-10-01            # auditor + redfin + report
 """
@@ -17,7 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from pipeline import auditor, county_file, db, redfin
+from pipeline import auditor, county_file, db, redfin, zillow
 
 
 def report(con, export: str | None) -> None:
@@ -54,28 +55,41 @@ def report(con, export: str | None) -> None:
         latest = latest.groupby(region).head(4) if region else latest.head(8)
         print("\n== Redfin Columbus metro + counties, latest 4 per region ==")
         print(latest[cols].to_string(index=False))
+        print(f"Source: {redfin.ATTRIBUTION}")
     except Exception:
         print("\n(no Redfin data loaded)")
+
+    zv = q("""SELECT region_name, month, zhvi, zhvi_yoy_pct FROM v_zillow_yoy
+              WHERE region_type = 'county' AND month = (SELECT MAX(month) FROM zillow_zhvi)
+              ORDER BY region_name""")
+    if not zv.empty:
+        print("\n== Zillow home value index by county, latest month ==")
+        print(zv.to_string(index=False))
+        print(f"Source: {zillow.ATTRIBUTION}")
 
     if export:
         out = Path(export)
         out.mkdir(parents=True, exist_ok=True)
         for v in ("v_county_week", "v_county_rolling4", "v_zip_month", "v_sale_clean"):
             q(f"SELECT * FROM {v}").to_csv(out / f"{v}.csv", index=False)
+        # Zillow requires attribution wherever its data goes, so it travels with the export.
+        q("SELECT * FROM v_zillow_yoy").to_csv(out / "v_zillow_yoy.csv", index=False)
+        (out / "ATTRIBUTION.txt").write_text(f"v_zillow_yoy.csv: {zillow.ATTRIBUTION}\n")
         print(f"\nExported views to {out.resolve()}")
 
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("cmd", choices=["auditor", "reparse", "county-file", "redfin", "report", "all"])
+    p.add_argument("cmd", choices=["auditor", "reparse", "county-file", "redfin", "zillow", "report", "all"])
     p.add_argument("--county", choices=county_file.COUNTIES, help="county for county-file")
     p.add_argument("--db", default=db.DEFAULT_DB, help="SQL Server database name")
     p.add_argument("--server", default=db.DEFAULT_SERVER, help="SQL Server instance")
     p.add_argument("--since", type=date.fromisoformat, default=date.today() - timedelta(days=56))
     p.add_argument("--commercial", action="store_true", help="also load commercial sales")
     p.add_argument("--refetch", action="store_true", help="re-pull reports already loaded")
-    p.add_argument("--file", help="local Redfin CSV/TSV(.gz), or county export for county-file")
-    p.add_argument("--url", help="Redfin file URL override")
+    p.add_argument("--file", help="local file: Redfin CSV/TSV(.gz), county export, or Zillow CSV")
+    p.add_argument("--url", help="Redfin or Zillow file URL override")
+    p.add_argument("--kind", choices=list(zillow.URLS), help="Zillow file: county or zip (default both)")
     p.add_argument("--export", help="dir to write view CSVs")
     p.add_argument("-v", action="store_true")
     a = p.parse_args(argv)
@@ -91,13 +105,22 @@ def main(argv=None) -> int:
         if not (a.county and a.file):
             p.error("county-file needs --county and --file")
         print("county-file new rows:", county_file.load(con, a.county, a.file))
-    if a.cmd in ("redfin", "all"):
+    if a.cmd == "all" and not (a.file or a.url):
+        print("redfin: skipped (no --file/--url; download from the Redfin Data Center)")
+    elif a.cmd in ("redfin", "all"):
         try:
             print("redfin rows:", redfin.load(con, file=a.file, url=a.url))
         except Exception as e:  # don't let one source kill the run
             logging.error("redfin load failed: %s", e)
             if a.cmd == "redfin":
                 return 1
+    if a.cmd == "zillow":
+        kinds = [a.kind] if a.kind else list(zillow.URLS)
+        if (a.file or a.url) and len(kinds) > 1:
+            p.error("zillow --file/--url needs --kind county or --kind zip")
+        for k in kinds:
+            n = zillow.load(con, k, file=a.file, url=a.url)
+            print(f"zillow {k}:", "unchanged, skipped" if n is None else f"{n} rows")
     if a.cmd in ("report", "all"):
         report(con, a.export)
     return 0
