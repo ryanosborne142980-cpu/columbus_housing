@@ -3,3 +3,8 @@ __pycache__/
 .pytest_cache/
 data/
 out/
+
+# Personal AI-assistant instructions (kept locally, not published)
+claude.md
+CLAUDE.md
+.github/copilot-instructions.md
