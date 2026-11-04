@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeline import auditor, county_file, db, http, redfin, zillow
+from pipeline import auditor, backup, county_file, db, http, redfin, zillow
 
 FX = Path(__file__).parent / "fixtures"
 
@@ -275,3 +275,18 @@ def test_redfin_gzip_read_in_chunks(con, monkeypatch, tmp_path):
     price = con.execute(f"SELECT median_sale_price FROM {redfin.TABLE} "
                         "WHERE region_name = 'Franklin County, OH'").fetchone()[0]
     assert price == 330000  # text read per chunk, converted back to a number
+
+
+def test_backup_prune_keeps_newest_of_that_database_only(tmp_path):
+    for stamp in ("20261101_070000", "20261102_070000", "20261103_070000"):
+        (tmp_path / f"columbus_housing_{stamp}.bak").touch()
+    other = tmp_path / "columbus_housing_test_20260101_070000.bak"
+    other.touch()
+    note = tmp_path / "notes.txt"
+    note.touch()
+    removed = backup.prune(tmp_path, "columbus_housing", keep=2)
+    assert [f.name for f in removed if "20261101" in f.name] == ["columbus_housing_20261101_070000.bak"]
+    assert (tmp_path / "columbus_housing_20261103_070000.bak").exists()
+    assert (tmp_path / "columbus_housing_20261102_070000.bak").exists()
+    assert note.exists()
+    assert other.exists()
