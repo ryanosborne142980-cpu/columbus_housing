@@ -29,19 +29,20 @@ LISTING = {
 # These filename patterns keep the weekly report discovery resilient when the site's URLs change
 # across years or publication formats.
 SLUG_GUESSES = {
-    "residential": ["{d}-WHSR", "{d}-Residential-Sales-Report", "{d}-Home-Sales"],
-    "commercial": ["{d}-WCSR", "{d}-Commercial-Sales"],
+    "residential": ["{d}-WHSR", "{d}-Residential-Sales-Report", "{d}-Home-Sales",
+                    "{d}-Weekly-Home-Sales-Report"],
+    "commercial": ["{d}-WCSR", "{d}-Commercial-Sales", "{d}-Commercial-Sales-Report"],
 }
 
 _PERIOD_RE = re.compile(
     r"(?:week of|from)\s+([A-Z][a-z]+\.?\s+\d{1,2})(?:,?\s+(\d{4}))?\s+(?:through|to|-)\s+"
     r"([A-Z][a-z]+\.?\s+\d{1,2}),?\s+(\d{4})"
 )
-# Older pages (Apr 2026) give the week without a year: "week of Apr. 3–9" or
-# "past week (April 10 - April 16)". The year then comes from the publish date.
+# Older pages (Apr 2026) shorten the week: "week of Apr. 3–9", "past week (April 10 - April 16)" or
+# "week of April 17 through 23, 2026". The year comes from the publish date.
 _PERIOD_NOYEAR_RE = re.compile(
     r"(?:week of|past week \()\s*([A-Z][a-z]+\.?\s+\d{1,2})\s*(?:through|to|[-\u2013\u2014])\s*"
-    r"([A-Z][a-z]+\.?\s+)?(\d{1,2})\b(?!,?\s*\d{4})"
+    r"([A-Z][a-z]+\.?\s+)?(\d{1,2})\b"
 )
 _PUBLISHED_RE = re.compile(r"Published on\s+(\d{1,2}\s+[A-Z][a-z]+\s+\d{4})")
 _ZIP_RE = re.compile(r"\b(4\d{4})\b")  # all Franklin County ZIPs start with 43
@@ -328,6 +329,22 @@ def run(con, since: date, report_types=("residential",), refetch=False) -> dict:
             stats["reports"] += 1
             log.info("%s: %s rows (%s to %s)", url, len(rep.sales), rep.period_start, rep.period_end)
     return stats
+
+
+def load_url(con, url: str) -> int:
+    """Fetch one report page by URL, save it, and load it. Returns how many sales were new.
+
+    For a report discovery can't find. Re-running it is safe.
+    """
+    if not url.startswith(BASE + "/News-articles/"):
+        raise ValueError(f"Not a Franklin County report URL: {url}")
+    r = http.get(url)
+    r.raise_for_status()
+    db.save_raw(con, url, r.text, r.status_code)
+    con.commit()
+    rep = parse_report(r.text, url)
+    log.info("%s: %s rows (%s to %s)", url, len(rep.sales), rep.period_start, rep.period_end)
+    return load(con, rep)
 
 
 def reparse(con) -> dict:

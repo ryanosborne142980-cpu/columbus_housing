@@ -62,7 +62,10 @@ Expected exceptions:
 
 - **Week of Sep 4, 2026 (`diff` of -1):** the page lists 336 parcels, but its summary says 337. The county's
   number is wrong.
-- **Five April/May 2026 reports with no summary:** the county didn't publish one.
+- **Nine April/May 2026 reports with no summary (5 residential, 4 commercial):** the pages don't include one.
+  Their parsed counts were checked against the parcel numbers on each page instead.
+- **Some report weeks look odd, such as Jun 20 – 26, 2026:** the county's page gives two different ranges. The
+  summary views use each sale's own date, not the report's week.
 
 ## When something fails
 
@@ -79,6 +82,14 @@ Expected exceptions:
 | Zillow: 404 | Zillow moved its CSV paths | Get the new link from the [data page](https://www.zillow.com/research/data/), then use `--url` or `--file`. |
 | County file: `no column for [...]` | An unfamiliar header | The error lists the file's columns. Add the header to `COLUMN_HINTS` and add a test. |
 | CI `test` fails but local passes | A difference between the Linux container and local | Read the job log. Check for Windows-only assumptions in paths, line endings or auth. |
+
+## Load one report
+
+If a report is on the county's listing but discovery missed it, load it directly. This is safe to repeat.
+
+```bash
+python run.py auditor --url <report page URL>
+```
 
 ## Re-parse saved pages
 
@@ -117,9 +128,5 @@ As of 2026-11-04. Move these to issues as they get scheduled.
 - **The weekly job isn't scheduled.** It only runs by hand. Set up Windows Task Scheduler with the repo root
   as the working directory, and make sure the task can see `COLUMBUS_HOUSING_SERVER`.
 - **Backups aren't scheduled.** They only run when someone runs `python run.py backup`.
-- **Two Franklin weeks are missing:**
-  - May 29 – Jun 4, 2026 is online at `/News-articles/20260604-Residential-Sales-Report` (569 sales).
-    Discovery only tries dates within a day of each Sunday, so it misses this page.
-  - May 1 – 7, 2026 hasn't been located.
 - **Redfin, Delaware and Licking aren't loaded.** All three need a file obtained by hand.
 - **Franklin year-over-year isn't available yet.** It needs a year of captured weeks. Zillow covers the gap.

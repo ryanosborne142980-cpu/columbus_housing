@@ -71,6 +71,8 @@ def test_parse_period_month_abbreviations():
     assert auditor._parse_period("week of Dec. 26 through Jan. 1.", date(2026, 1, 4)) == (
         date(2025, 12, 26), date(2026, 1, 1))
     assert auditor._parse_period("week of Apr. 3\u20139.") == (None, None)  # no year, no hint
+    assert auditor._parse_period("for the week of April 17 through 23, 2026.", date(2026, 4, 26)) == (
+        date(2026, 4, 17), date(2026, 4, 23))
     assert auditor._date("04-03-2026") == date(2026, 4, 3)  # dashed dates on older pages
     # Unknown month name: no period, no exception.
     assert auditor._parse_period("week of Smarch 1 through Smarch 7, 2026") == (None, None)
@@ -188,9 +190,9 @@ def test_discover_guesses_past_listing_and_stops_after_misses(monkeypatch):
     got = auditor.discover("residential", date(2026, 1, 1), max_misses=2)
     assert [u.rsplit("/", 1)[1] for u in got] == [
         "20261010-WHSR", "20261018-WHSR", "20261025-WHSR", "20261101-WHSR"]
-    # Listing once; then two weeks found; then 2 dead weeks x 3 slugs x 3 day shifts, then stop.
+    # Listing once; then two weeks found; then 2 dead weeks x 4 slugs x 3 day shifts, then stop.
     assert not any("page=" in u for u in calls)
-    assert len(calls) == 1 + 1 + 2 + 2 * 9
+    assert len(calls) == 1 + 1 + 2 + 2 * 12
 
 
 class _HResp:
@@ -316,3 +318,21 @@ def test_export_only_sends_new_rows(con, tmp_path):
 
     with pytest.raises(KeyError):
         export.export_new(con, "raw_page; DROP TABLE x", None, tmp_path)
+
+
+def test_load_url_saves_page_and_loads_once(con, monkeypatch):
+    html = (FX / "whsr.html").read_text()
+    url = auditor.BASE + "/News-articles/20260510-Weekly-Home-Sales-Report"
+
+    class R:
+        status_code, text = 200, html
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(auditor.http, "get", lambda u, **kw: R())
+    assert auditor.load_url(con, url) == 6
+    assert auditor.load_url(con, url) == 0  # safe to repeat
+    assert con.execute("SELECT COUNT(*) FROM raw_page WHERE url = ?", url).fetchone()[0] == 1
+    with pytest.raises(ValueError, match="Not a Franklin"):
+        auditor.load_url(con, "https://example.com/News-articles/20260510-WHSR")

@@ -49,6 +49,9 @@ code handles the format we expect; they do not prove the live sources still look
   nothing; a changed copy is kept as a revision. Re-parsing from the saved pages loads 6 sales the first
   time and none the second.
 
+- **test_load_url_saves_page_and_loads_once**: With a fake network, loads one report by URL, saves its page, adds
+  nothing on a second run, and refuses a URL outside the county's reports.
+
 ### Finding report pages (offline)
 
 - **test_discover_guesses_past_listing_and_stops_after_misses**: Fakes the county site. Checks that
