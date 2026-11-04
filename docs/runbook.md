@@ -10,6 +10,7 @@ How to run the pipeline, check that it worked, and recover when it didn't. Run c
 | Zillow | 16th of the month | `python run.py zillow` | Monthly, after the 16th |
 | Redfin | Thursdays | `python run.py redfin --file <download>` | When you download a new file |
 | Database backup | n/a | `python run.py backup` | After each load, until scheduled |
+| Databricks bronze | n/a | See [databricks/](../databricks/README.md) | After each load |
 | Delaware, Licking | On request | `python run.py county-file --county <name> --file <file>` | When you receive a file |
 
 `all` loads Franklin and prints the report. It skips Redfin unless you pass `--file` or `--url`.

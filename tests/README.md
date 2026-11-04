@@ -101,6 +101,12 @@ code handles the format we expect; they do not prove the live sources still look
 - **test_zillow_skips_download_when_file_unchanged**: With a fake network, a second load sees the same
   Last-Modified date and skips the download.
 
+### Exports
+
+- **test_export_only_sends_new_rows**: Exports two sales, finds nothing new on a second run, then exports only a third
+  added later. Checks that `loaded_at` is renamed so it can't collide with bronze's column, and that an unknown table
+  name is refused.
+
 ### Backups
 
 - **test_backup_prune_keeps_newest_of_that_database_only**: Keeps the newest backups and removes older ones, without
