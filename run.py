@@ -23,7 +23,9 @@ from pipeline import auditor, county_file, db, redfin, zillow
 
 def report(con, export: str | None) -> None:
     pd.set_option("display.width", 140)
-    q = lambda sql: db.query_df(con, sql)
+
+    def q(sql):
+        return db.query_df(con, sql)
 
     roll = q("""SELECT * FROM (
                     SELECT *, ROW_NUMBER() OVER (PARTITION BY county ORDER BY week_start DESC) AS rn
@@ -33,7 +35,8 @@ def report(con, export: str | None) -> None:
     print(roll.to_string(index=False) if not roll.empty else "(no auditor data)")
 
     zips = q("""SELECT zip, month, sales, median_price, median_yoy_pct FROM v_zip_month
-                WHERE month = (SELECT MAX(month) FROM v_zip_month WHERE month < CONVERT(char(7), GETDATE(), 126))
+                WHERE month = (SELECT MAX(month) FROM v_zip_month
+                               WHERE month < CONVERT(char(7), GETDATE(), 126))
                   AND low_sample = 0 ORDER BY median_yoy_pct DESC""")
     print("\n== ZIPs, last full month (>=10 sales) ==")
     print(zips.to_string(index=False) if not zips.empty else "(need >=1 month + prior year for YoY)")
