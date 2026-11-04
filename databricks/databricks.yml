@@ -33,6 +33,8 @@ resources:
       libraries:
         - file:
             path: pipelines/bronze.py
+        - file:
+            path: pipelines/silver.py
 
 targets:
   dev:
