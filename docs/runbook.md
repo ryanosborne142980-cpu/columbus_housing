@@ -6,14 +6,19 @@ How to run the pipeline, check that it worked, and recover when it didn't. Run c
 
 | Source | Published | Command | When to run |
 |---|---|---|---|
-| Franklin County | Sundays | `python run.py all --commercial` | Weekly, Monday morning |
+| Weekly job (Franklin, backup, Databricks) | Sundays | `python scripts/weekly.py` | Mondays |
 | Zillow | 16th of the month | `python run.py zillow` | Monthly, after the 16th |
 | Redfin | Thursdays | `python run.py redfin --file <download>` | When you download a new file |
-| Database backup | n/a | `python run.py backup` | After each load, until scheduled |
-| Databricks bronze | n/a | See [databricks/](../databricks/README.md) | After each load |
 | Delaware, Licking | On request | `python run.py county-file --county <name> --file <file>` | When you receive a file |
 
-`all` loads Franklin and prints the report. It skips Redfin unless you pass `--file` or `--url`.
+Register the Monday task once with `powershell -ExecutionPolicy Bypass -File scripts\register_weekly_task.ps1`. It runs
+only while you're logged on, and catches up the next time the laptop is on if it missed a Monday. Open a new terminal
+first if `COLUMBUS_HOUSING_SERVER` or the Databricks CLI was set up recently, because the task needs both.
+
+Each run writes a log to `data/logs/` and its outcome to `data/logs/last_run.txt`. A failed run also shows as a
+non-zero last result in Task Scheduler. Nothing sends an alert, so look at one of those.
+
+`run.py all` loads Franklin and prints the report. It skips Redfin unless you pass `--file` or `--url`.
 
 By default it looks back 56 days. After a longer gap, add `--since <date>`.
 
@@ -30,7 +35,8 @@ auditor: {'reports': 1, 'new_rows': 340, 'skipped': 8}
 
 - **`reports` of 1 or more:** new pages were loaded.
 - **`reports` of 0 with `skipped` above 0:** normal if nothing new has been published.
-- **`reports` and `skipped` both 0:** discovery found nothing. See the table below.
+- **`reports` and `skipped` both 0:** discovery found nothing. See the table below. `run.py` exits non-zero for this,
+  for a page that couldn't be fetched, and when the newest week is over 14 days old.
 - **A `failed` key:** some pages couldn't be fetched. Re-run; it's safe.
 
 Pages that return an error status are logged as `WARNING HTTP ...` but aren't counted in these numbers, so
@@ -125,8 +131,8 @@ was tested on 2026-11-04: every table count matched, and `raw_page` matched on t
 
 As of 2026-11-04. Move these to issues as they get scheduled.
 
-- **The weekly job isn't scheduled.** It only runs by hand. Set up Windows Task Scheduler with the repo root
-  as the working directory, and make sure the task can see `COLUMBUS_HOUSING_SERVER`.
-- **Backups aren't scheduled.** They only run when someone runs `python run.py backup`.
+- **Nothing alerts you to a failed run.** You have to check `last_run.txt` or Task Scheduler.
+- **The weekly task only runs while you're logged on.**
+- **Discovery can miss a report dated over a day from its Sunday.** Compare the listing's count with what's loaded.
 - **Redfin, Delaware and Licking aren't loaded.** All three need a file obtained by hand.
 - **Franklin year-over-year isn't available yet.** It needs a year of captured weeks. Zillow covers the gap.
