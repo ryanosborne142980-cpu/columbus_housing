@@ -14,12 +14,22 @@ Needs SQL Server (default: local instance `.\ROSBO_SQL`, Windows auth) and ODBC 
 ```bash
 # Install the dependencies required to fetch, parse, and load the housing data.
 pip install -r requirements.txt
-# Run the automated checks (uses a throwaway database, columbus_housing_test, on the same instance).
-python -m pytest -q
 ```
 Data lands in database `columbus_housing` (created on first run). Override with `--server` / `--db`,
 or env vars `COLUMBUS_HOUSING_SERVER` / `COLUMBUS_HOUSING_DB`. Schema changes to existing tables are not
 applied automatically: `sql/schema.sql` only creates missing tables, while views are recreated on every run.
+
+To use a SQL login instead of Windows auth, set `COLUMBUS_HOUSING_UID` and `COLUMBUS_HOUSING_PWD`.
+
+## Development
+```bash
+pip install -r requirements-dev.txt   # adds pytest + ruff
+ruff check .                          # lint (config in pyproject.toml)
+python -m pytest -q                   # uses a throwaway database, columbus_housing_test
+```
+CI (`.github/workflows/ci.yml`) runs both on every pull request and push to `main`: ruff, then the full
+test suite against a SQL Server 2022 container. Work goes through branches and pull requests; merge only
+when CI is green.
 
 ## Run
 ```bash

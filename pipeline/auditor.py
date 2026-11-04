@@ -173,7 +173,8 @@ def parse_report(html: str, url: str) -> Report:
             # The summary table gives the county's reported totals and averages, which we keep for
             # validation and downstream reporting.
             vals = [c.get_text(strip=True) for c in rows[1].find_all(["td", "th"])]
-            cols = {h.lower(): v for h, v in zip(headers, vals)}
+            # Header and value rows can differ in length on odd pages; extra cells are ignored.
+            cols = {h.lower(): v for h, v in zip(headers, vals, strict=False)}
             rep.reported_count = _money(next((v for k, v in cols.items() if "number" in k), ""))
             rep.reported_avg = _money(next((v for k, v in cols.items() if "average" in k), ""))
             rep.reported_median = _money(next((v for k, v in cols.items() if "median" in k), ""))
