@@ -34,7 +34,8 @@ code handles the format we expect; they do not prove the live sources still look
   recognized as commercial, that a week from Dec 26 to Jan 1 gets the right year on each end, and that
   the ZIP is picked up from the table caption.
 - **test_parse_period_month_abbreviations**: Checks that report weeks written as "Sept.", "Sep." or
-  "September" all read correctly, and that an unrecognizable month name leaves the week blank instead
+  "September" all read correctly, that older pages with no year ("Apr. 3–9") take the year from the
+  publish date, that dashed dates ("04-03-2026") read, and that an unrecognizable month name leaves the week blank instead
   of stopping the run.
 
 ### Saving to the database

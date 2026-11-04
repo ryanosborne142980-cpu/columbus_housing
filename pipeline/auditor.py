@@ -37,6 +37,12 @@ _PERIOD_RE = re.compile(
     r"(?:week of|from)\s+([A-Z][a-z]+\.?\s+\d{1,2})(?:,?\s+(\d{4}))?\s+(?:through|to|-)\s+"
     r"([A-Z][a-z]+\.?\s+\d{1,2}),?\s+(\d{4})"
 )
+# Older pages (Apr 2026) give the week without a year: "week of Apr. 3–9" or
+# "past week (April 10 - April 16)". The year then comes from the publish date.
+_PERIOD_NOYEAR_RE = re.compile(
+    r"(?:week of|past week \()\s*([A-Z][a-z]+\.?\s+\d{1,2})\s*(?:through|to|[-\u2013\u2014\ufffd])\s*"
+    r"([A-Z][a-z]+\.?\s+)?(\d{1,2})\b(?!,?\s*\d{4})"
+)
 _PUBLISHED_RE = re.compile(r"Published on\s+(\d{1,2}\s+[A-Z][a-z]+\s+\d{4})")
 _ZIP_RE = re.compile(r"\b(4\d{4})\b")  # all Franklin County ZIPs start with 43
 _PARCEL_RE = re.compile(r"\d{3}-\d{6}-\d{2}")
@@ -66,7 +72,7 @@ def _money(s: str) -> int | None:
 def _date(s: str) -> date | None:
     # Accept a few common U.S. date formats and normalize them to Python date objects.
     s = (s or "").strip()
-    for fmt in ("%m/%d/%Y", "%m/%d/%y", "%Y-%m-%d"):
+    for fmt in ("%m/%d/%Y", "%m/%d/%y", "%m-%d-%Y", "%Y-%m-%d"):
         try:
             return datetime.strptime(s, fmt).date()
         except ValueError:
@@ -86,13 +92,19 @@ def _month_day(md: str, year: int) -> date:
     raise ValueError(md)
 
 
-def _parse_period(text: str) -> tuple[date | None, date | None]:
+def _parse_period(text: str, year_hint: date | None = None) -> tuple[date | None, date | None]:
     # Extract the report's sale week range from the full page text, including edge cases where
     # the county's date range crosses New Year's or uses a slightly inconsistent wording.
+    # year_hint (the publish date) supplies the year when the page omits it.
     m = _PERIOD_RE.search(text)
-    if not m:
+    if m:
+        s_md, s_year, e_md, e_year = m.groups()
+    elif year_hint and (m := _PERIOD_NOYEAR_RE.search(text)):
+        s_md, e_month, e_day = m.groups()
+        e_md = f"{(e_month or s_md.rsplit(' ', 1)[0]).strip()} {e_day}"
+        s_year, e_year = None, str(year_hint.year)
+    else:
         return None, None
-    s_md, s_year, e_md, e_year = m.groups()
     try:
         end = _month_day(e_md, int(e_year))
         start = _month_day(s_md, int(s_year or e_year))
@@ -100,6 +112,8 @@ def _parse_period(text: str) -> tuple[date | None, date | None]:
         # An unrecognized month name shouldn't sink the report; its sales still load.
         log.warning("unparseable report period: %r", m.group(0))
         return None, None
+    if year_hint and end > year_hint:  # yearless week ending after its publish date: Dec, published Jan
+        start, end = (start.replace(year=start.year - 1), end.replace(year=end.year - 1))
     if start > end:  # Dec 26 through Jan 1 -> start is prior year; also fixes county typos
         start = _month_day(s_md, int(e_year) - 1) if start.month > end.month else end - timedelta(days=6)
     return start, end
@@ -144,9 +158,9 @@ def parse_report(html: str, url: str) -> Report:
     text = soup.get_text(" ", strip=True)
 
     rep = Report(url=url, report_type=report_type)
-    rep.period_start, rep.period_end = _parse_period(title + " " + text)
     if m := _PUBLISHED_RE.search(text):
         rep.published_on = datetime.strptime(m.group(1), "%d %B %Y").date()
+    rep.period_start, rep.period_end = _parse_period(title + " " + text, rep.published_on)
 
     for table in soup.find_all("table"):
         rows = table.find_all("tr")

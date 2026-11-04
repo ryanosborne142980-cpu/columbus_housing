@@ -61,6 +61,15 @@ def test_parse_period_month_abbreviations():
         date(2026, 9, 19), date(2026, 9, 25))
     assert auditor._parse_period("week of September 19 through Sep. 25, 2026") == (
         date(2026, 9, 19), date(2026, 9, 25))
+    # Older pages omit the year; it comes from the publish date (incl. a December week published in Jan).
+    pub = date(2026, 4, 12)
+    assert auditor._parse_period("for the week of Apr. 3\u20139.", pub) == (date(2026, 4, 3), date(2026, 4, 9))
+    assert auditor._parse_period("for the past week (April 10 - April 16), as", date(2026, 4, 19)) == (
+        date(2026, 4, 10), date(2026, 4, 16))
+    assert auditor._parse_period("week of Dec. 26 through Jan. 1.", date(2026, 1, 4)) == (
+        date(2025, 12, 26), date(2026, 1, 1))
+    assert auditor._parse_period("week of Apr. 3\u20139.") == (None, None)  # no year, no hint
+    assert auditor._date("04-03-2026") == date(2026, 4, 3)  # dashed dates on older pages
     # Unknown month name: no period, no exception.
     assert auditor._parse_period("week of Smarch 1 through Smarch 7, 2026") == (None, None)
 
