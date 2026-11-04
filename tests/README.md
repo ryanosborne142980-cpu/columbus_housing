@@ -80,6 +80,9 @@ code handles the format we expect; they do not prove the live sources still look
 
 - **test_redfin_keeps_columbus_metro_and_three_counties**: Loads the sample Redfin file and checks that
   only the Columbus metro rows and the Franklin, Delaware and Licking county rows (all Ohio) are kept.
+- **test_redfin_gzip_read_in_chunks**: Loads a gzipped copy with no `.gz` in the name, read 3 rows at a
+  time, and checks the same 5 rows come through with numbers intact. Real files cover the whole US, so
+  they are filtered chunk by chunk instead of loaded whole.
 
 ### Polite fetching (offline, fake network)
 

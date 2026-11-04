@@ -227,3 +227,14 @@ def test_http_crawl_delay_and_retry_after(fake_net):
     assert http.get("https://c.test/p").status_code == 200
     assert 7.0 in sleeps                    # honored Retry-After
     assert any(s > 9 for s in sleeps if s != 7.0)  # throttled to Crawl-delay, not 2s
+
+
+def test_redfin_gzip_read_in_chunks(con, monkeypatch, tmp_path):
+    gz = tmp_path / "weekly.tsv000"  # gzipped without a .gz name, like Redfin's S3 files
+    import gzip
+    gz.write_bytes(gzip.compress((FX / "redfin_weekly.tsv").read_bytes()))
+    monkeypatch.setattr(redfin, "CHUNK_ROWS", 3)  # 8 rows -> 3 chunks
+    assert redfin.load(con, file=str(gz)) == 5
+    price = con.execute(f"SELECT median_sale_price FROM {redfin.TABLE} "
+                        "WHERE region_name = 'Franklin County, OH'").fetchone()[0]
+    assert price == 330000  # text read per chunk, converted back to a number

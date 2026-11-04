@@ -29,7 +29,7 @@ python run.py reparse
 # Import a Delaware county sales export from a local Excel or CSV file.
 python run.py county-file --county Delaware --file sales.xlsx   # CSV, TSV, .xls or .xlsx
 # Download or import the Redfin market-tracker dataset for leading indicators.
-python run.py redfin                           # default S3 URL; or --file <download from Redfin hub>
+python run.py redfin --file <download>         # from https://www.redfin.com/news/data-center/
 # Generate the reports and export every view to CSV files in the target folder.
 python run.py report --export out/             # summary + CSVs of every view
 # Run the regular weekly job for Franklin County and Redfin data only.
@@ -57,5 +57,5 @@ Re-runs are idempotent: loaded reports are skipped, and sales are keyed on count
 - **No property attributes** (sqft, beds, year built), so medians move with mix shift. Treat moves under ~3% as noise until you enrich via parcel lookup.
 - **The $10k floor is a proxy** for arm's-length sales. It doesn't catch below-market related-party sales or bulk/portfolio deals.
 - **Daily Conveyance is robots-disallowed** and deliberately unused. The code honors robots.txt everywhere.
-- **Redfin default URL is the legacy S3 file.** After Redfin's May 2026 Data Center rebuild, verify it still updates; if not, download from https://www.redfin.com/news/data-center/downloads/ and use `--file`. The loader auto-detects CSV/TSV/gz and column names.
+- **Redfin is a manual download.** The legacy S3 weekly file stopped updating in March 2025 and the old market-tracker paths return 403; the new Data Center's links are JS-rendered. Download the weekly file from https://www.redfin.com/news/data-center/ and load it with `--file` (CSV/TSV/gz auto-detected, read in chunks so all-US files are fine). `all` skips Redfin unless you pass `--file`. Credit Redfin wherever its data is shown.
 - **Parser** was built against the live page structure as of 2026-11-01. Check `v_report_validation` after your first run.

@@ -2,7 +2,7 @@
 
   python run.py auditor --since 2025-10-01            # backfill/incremental Franklin weekly sales
   python run.py county-file --county Delaware --file x.csv   # Delaware/Licking sales export
-  python run.py redfin  [--file path | --url url]     # Redfin weekly metro tracker
+  python run.py redfin  --file path [| --url url]     # Redfin weekly tracker (manual download)
   python run.py reparse                             # re-parse saved raw pages after a parser fix
   python run.py report  [--export out/]               # trend summary (+ CSV export)
   python run.py all     --since 2025-10-01            # auditor + redfin + report
@@ -54,6 +54,7 @@ def report(con, export: str | None) -> None:
         latest = latest.groupby(region).head(4) if region else latest.head(8)
         print("\n== Redfin Columbus metro + counties, latest 4 per region ==")
         print(latest[cols].to_string(index=False))
+        print(f"Source: {redfin.ATTRIBUTION}")
     except Exception:
         print("\n(no Redfin data loaded)")
 
@@ -91,7 +92,9 @@ def main(argv=None) -> int:
         if not (a.county and a.file):
             p.error("county-file needs --county and --file")
         print("county-file new rows:", county_file.load(con, a.county, a.file))
-    if a.cmd in ("redfin", "all"):
+    if a.cmd == "all" and not (a.file or a.url):
+        print("redfin: skipped (no --file/--url; download from the Redfin Data Center)")
+    elif a.cmd in ("redfin", "all"):
         try:
             print("redfin rows:", redfin.load(con, file=a.file, url=a.url))
         except Exception as e:  # don't let one source kill the run
