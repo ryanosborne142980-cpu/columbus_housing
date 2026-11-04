@@ -19,7 +19,7 @@ import pyodbc
 # Project root (two levels up from this file: pipeline/db.py -> repo root).
 ROOT = Path(__file__).resolve().parent.parent
 # Connection defaults; override with env vars or run.py --db / --server.
-DEFAULT_SERVER = os.environ.get("COLUMBUS_HOUSING_SERVER", r".\ROSBO_SQL")
+DEFAULT_SERVER = os.environ.get("COLUMBUS_HOUSING_SERVER", "localhost")
 DEFAULT_DB = os.environ.get("COLUMBUS_HOUSING_DB", "columbus_housing")
 DRIVER = "ODBC Driver 18 for SQL Server"
 # sql/*.sql files are split into batches on lines containing only GO (CREATE VIEW must start a batch).

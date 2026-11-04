@@ -10,7 +10,8 @@ Weekly Columbus-area housing trends from free, legitimate sources, landed in SQL
 | Zillow Home Value Index (ZHVI) | Franklin/Delaware/Licking county rows + their ZIPs, monthly, back to 2000 | Monthly (16th) | Long history for YoY and a seasonal baseline; smoothed, seasonally adjusted. **Attribution to Zillow required.** |
 
 ## Setup
-Needs SQL Server (default: local instance `.\ROSBO_SQL`, Windows auth) and ODBC Driver 18 for SQL Server.
+Needs SQL Server (default: `localhost`, Windows auth; for a named instance set `COLUMBUS_HOUSING_SERVER`,
+e.g. `.\SQLEXPRESS`) and ODBC Driver 18 for SQL Server.
 ```bash
 # Install the dependencies required to fetch, parse, and load the housing data.
 pip install -r requirements.txt

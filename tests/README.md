@@ -6,7 +6,7 @@ Run from the project root:
 python -m pytest -q
 ```
 
-The database tests need the local SQL Server instance (`.\ROSBO_SQL`, or set
+The database tests need a SQL Server instance (`localhost` by default, or set
 `COLUMBUS_HOUSING_SERVER`) and ODBC Driver 18 for SQL Server. The three parsing tests run without
 it. Database tests use their own database, `columbus_housing_test`, which is created on first run
 and emptied before every test. The real `columbus_housing` database is never touched.
