@@ -1,10 +1,10 @@
 -- Landed tables. Each is created only if missing, so existing data is kept.
 --
 -- Layers:
---   raw      raw_page (fetched HTML, kept verbatim), plus county export files and the Redfin file
---   cleaned  auditor_report / auditor_sale (parsed), redfin_columbus_weekly, v_sale_clean
---   summary  v_county_week, v_county_rolling4, v_zip_month (sql/views.sql)
--- Franklin report pages drop off the county site after ~30 weeks, so raw_page is the only
+--   raw      raw_page (fetched report HTML); other sources' files aren't retained
+--   cleaned  auditor_report / auditor_sale (parsed), redfin_columbus_weekly, zillow_zhvi, v_sale_clean
+--   summary  v_county_week, v_county_rolling4, v_zip_month, v_zillow_yoy (sql/views.sql)
+-- Franklin report pages appear to drop off the county site after ~30 weeks, so raw_page is the only
 -- way to re-parse an old week after a parser fix (python run.py reparse).
 
 -- Every fetched report page, verbatim. A refetch adds a row only if the content changed.
