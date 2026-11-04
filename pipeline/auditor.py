@@ -40,7 +40,7 @@ _PERIOD_RE = re.compile(
 # Older pages (Apr 2026) give the week without a year: "week of Apr. 3–9" or
 # "past week (April 10 - April 16)". The year then comes from the publish date.
 _PERIOD_NOYEAR_RE = re.compile(
-    r"(?:week of|past week \()\s*([A-Z][a-z]+\.?\s+\d{1,2})\s*(?:through|to|[-\u2013\u2014\ufffd])\s*"
+    r"(?:week of|past week \()\s*([A-Z][a-z]+\.?\s+\d{1,2})\s*(?:through|to|[-\u2013\u2014])\s*"
     r"([A-Z][a-z]+\.?\s+)?(\d{1,2})\b(?!,?\s*\d{4})"
 )
 _PUBLISHED_RE = re.compile(r"Published on\s+(\d{1,2}\s+[A-Z][a-z]+\s+\d{4})")
@@ -216,7 +216,7 @@ def discover(report_type: str, since: date, max_misses: int = 4) -> list[str]:
 
     The listing shows only the newest 10 reports; its paging is an ASP.NET postback, so a
     &page= parameter is ignored. Older weeks are found by guessing slugs week by week until
-    `since`, or until `max_misses` weeks in a row have no page (the county keeps ~30 weeks).
+    `since`, or until `max_misses` weeks in a row have no page (the county appears to keep ~30 weeks).
     """
     # Listing can mix categories if the filter is ignored; the slug says which type a page is.
     tag = "WCSR|Commercial" if report_type == "commercial" else "WHSR|Residential|Home"
