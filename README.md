@@ -35,6 +35,7 @@ when CI is green.
 - [CONTRIBUTING.md](CONTRIBUTING.md): workflow, review checklist, adding a data source
 - [docs/runbook.md](docs/runbook.md): running the pipeline, checking results, recovering from failures
 - [docs/decisions/](docs/decisions/README.md): why the pipeline works the way it does
+- [databricks/](databricks/README.md): bronze layer with Auto Loader, deployed as an asset bundle
 
 ## Run
 ```bash

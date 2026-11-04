@@ -31,13 +31,13 @@ For a SQL login, set `COLUMBUS_HOUSING_UID` and `COLUMBUS_HOUSING_PWD`. Never pu
 
 ## Commit messages
 
-Use a short imperative subject. Use the body to explain why, not to restate the diff.
+Write them the way you'd explain the change to a teammate. Keep the subject short and use the body to say why.
 
 ```text
-Make Redfin a manual download and read files in chunks
+Stop defaulting to Redfin's old weekly file
 
-The legacy S3 weekly file stopped updating in March 2025, so drop the default URL.
-Read files in chunks, since loading a full-US file whole reached 6.8 GB of memory.
+It hasn't updated since March 2025, so a successful load would quietly bring in stale
+data. You now have to point the loader at a file you downloaded.
 ```
 
 ## What `main` enforces

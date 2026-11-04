@@ -12,5 +12,6 @@ situation, the decision, and what it costs.
 | [0005](0005-redfin-manual-download.md) | Make Redfin a manual download | Accepted |
 | [0006](0006-zillow-monthly-csv.md) | Load Zillow from published CSVs, outside the weekly job | Accepted |
 | [0007](0007-ci-and-branch-protection.md) | Test against real SQL Server and protect `main` | Accepted |
+| [0008](0008-land-files-then-auto-loader.md) | Download locally, then load with Auto Loader | Accepted |
 
 To change a decision, add a new record and mark the old one superseded.
