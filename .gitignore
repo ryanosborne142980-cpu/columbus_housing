@@ -8,3 +8,6 @@ out/
 claude.md
 CLAUDE.md
 .github/copilot-instructions.md
+
+# Databricks bundle state
+.databricks/
