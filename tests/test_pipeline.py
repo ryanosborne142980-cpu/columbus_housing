@@ -1,3 +1,4 @@
+import importlib.util
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -336,3 +337,48 @@ def test_load_url_saves_page_and_loads_once(con, monkeypatch):
     assert con.execute("SELECT COUNT(*) FROM raw_page WHERE url = ?", url).fetchone()[0] == 1
     with pytest.raises(ValueError, match="Not a Franklin"):
         auditor.load_url(con, "https://example.com/News-articles/20260510-WHSR")
+
+
+def _run_pipeline_module():
+    spec = importlib.util.spec_from_file_location(
+        "run_pipeline", Path(__file__).parent.parent / "databricks" / "run_pipeline.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("final, expected", [("COMPLETED", 0), ("FAILED", 1)])
+def test_run_pipeline_reports_how_a_restart_ended(monkeypatch, final, expected):
+    rp = _run_pipeline_module()
+    old = {"update_id": "old", "state": "COMPLETED", "cause": "API_CALL"}
+    stopped = {"update_id": "a", "state": "CANCELED", "cause": "API_CALL"}
+    restart = {"update_id": "b", "state": "RUNNING", "cause": "SCHEMA_CHANGE"}
+    done = {"update_id": "b", "state": final, "cause": "SCHEMA_CHANGE"}
+    # Newest first. The stopped update is settled for two polls before the restart shows up.
+    seen = iter([[old], [stopped, old], [stopped, old], [restart, stopped, old],
+                 [done, stopped, old], [done, stopped, old], [done, stopped, old]])
+
+    class Done:
+        returncode = 1
+
+    monkeypatch.setattr(rp.shutil, "which", lambda name: "databricks")
+    monkeypatch.setattr(rp, "_json", lambda *a: [{"name": rp.NAMES["dev"], "pipeline_id": "p"}])
+    monkeypatch.setattr(rp, "_updates", lambda pipeline_id: next(seen))
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: Done())
+    monkeypatch.setattr(rp.time, "sleep", lambda seconds: None)
+    assert rp.run("dev") == expected
+
+
+def test_run_pipeline_ignores_a_finished_update_from_before_this_run(monkeypatch):
+    rp = _run_pipeline_module()
+    old = {"update_id": "old", "state": "COMPLETED", "cause": "API_CALL"}
+
+    class Done:
+        returncode = 1
+
+    monkeypatch.setattr(rp.shutil, "which", lambda name: "databricks")
+    monkeypatch.setattr(rp, "_json", lambda *a: [{"name": rp.NAMES["dev"], "pipeline_id": "p"}])
+    monkeypatch.setattr(rp, "_updates", lambda pipeline_id: [old])
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: Done())
+    monkeypatch.setattr(rp.time, "sleep", lambda seconds: None)
+    assert rp.run("dev") == 1  # a failed start must not borrow an earlier update's success

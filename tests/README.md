@@ -110,6 +110,13 @@ code handles the format we expect; they do not prove the live sources still look
   added later. Checks that `loaded_at` is renamed so it can't collide with bronze's column, and that an unknown table
   name is refused.
 
+### Pipeline runs
+
+- **test_run_pipeline_reports_how_a_restart_ended**: With a fake CLI, `run_pipeline.py` waits through a schema-change
+  restart and reports whether the restart completed or failed.
+- **test_run_pipeline_ignores_a_finished_update_from_before_this_run**: A run that fails to start can't report success
+  by reading an older update.
+
 ### Backups
 
 - **test_backup_prune_keeps_newest_of_that_database_only**: Keeps the newest backups and removes older ones, without

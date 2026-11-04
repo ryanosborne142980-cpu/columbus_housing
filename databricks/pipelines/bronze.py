@@ -11,8 +11,6 @@ Data from Zillow requires attribution wherever it's shown.
 import dlt
 from pyspark.sql import functions as F
 
-VOLUME = "/Volumes/workspace/columbus_housing/raw"
-
 
 def _auto_loader(folder: str):
     return (
@@ -21,7 +19,7 @@ def _auto_loader(folder: str):
         .option("cloudFiles.inferColumnTypes", "false")
         .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
         .option("header", "true")
-        .load(f"{VOLUME}/{folder}/")
+        .load(f"{spark.conf.get('columbus.volume')}/{folder}/")  # noqa: F821
         .withColumn("source_file", F.col("_metadata.file_path"))
         .withColumn("source_modified_at", F.col("_metadata.file_modification_time"))
         .withColumn("loaded_at", F.current_timestamp())

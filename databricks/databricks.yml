@@ -8,11 +8,16 @@ workspace:
   # Local CLI profile name; the workspace URL stays out of the repo.
   profile: columbus
 
+variables:
+  schema:
+    description: Schema that holds the volume and tables
+    default: columbus_housing
+
 resources:
   schemas:
     columbus_housing:
       catalog_name: workspace
-      name: columbus_housing
+      name: ${var.schema}
       comment: Columbus-area housing data
 
   volumes:
@@ -25,11 +30,13 @@ resources:
 
   pipelines:
     bronze:
-      name: columbus_housing_bronze
+      name: ${var.schema}_bronze
       catalog: workspace
       schema: ${resources.schemas.columbus_housing.name}
       serverless: true
       continuous: false
+      configuration:
+        columbus.volume: /Volumes/workspace/${var.schema}/raw
       libraries:
         - file:
             path: pipelines/bronze.py
@@ -39,3 +46,14 @@ resources:
 targets:
   dev:
     default: true
+
+  # Separate schema for drift_test.py, so sample rows can't reach the real tables.
+  test:
+    variables:
+      schema: columbus_housing_test
+    resources:
+      pipelines:
+        bronze:
+          libraries:
+            - file:
+                path: pipelines/drift_modes.py
