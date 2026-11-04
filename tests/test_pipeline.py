@@ -336,3 +336,19 @@ def test_load_url_saves_page_and_loads_once(con, monkeypatch):
     assert con.execute("SELECT COUNT(*) FROM raw_page WHERE url = ?", url).fetchone()[0] == 1
     with pytest.raises(ValueError, match="Not a Franklin"):
         auditor.load_url(con, "https://example.com/News-articles/20260510-WHSR")
+
+
+def test_run_problems_flags_runs_that_look_finished_but_failed(con):
+    today = date(2026, 11, 9)
+    healthy = {"reports": 1, "new_rows": 300, "skipped": 8}
+    assert "older" not in " ".join(auditor.run_problems(con, healthy, today))
+    assert auditor.run_problems(con, healthy, today)  # empty table: nothing is fresh
+
+    con.execute("INSERT INTO auditor_report (report_url, report_type, period_end) "
+                "VALUES ('r', 'residential', '2026-11-05')")
+    assert auditor.run_problems(con, healthy, today) == []
+    assert auditor.run_problems(con, {"reports": 0, "new_rows": 0, "skipped": 9}, today) == []  # nothing new
+    assert "discovery found no reports" in auditor.run_problems(
+        con, {"reports": 0, "new_rows": 0, "skipped": 0}, today)
+    assert any("couldn't be fetched" in x for x in auditor.run_problems(con, {**healthy, "failed": 2}, today))
+    assert any("days ago" in x for x in auditor.run_problems(con, healthy, date(2026, 12, 1)))
