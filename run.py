@@ -3,6 +3,7 @@
   python run.py auditor --since 2025-10-01            # backfill/incremental Franklin weekly sales
   python run.py county-file --county Delaware --file x.csv   # Delaware/Licking sales export
   python run.py redfin  --file path [| --url url]     # Redfin weekly tracker (manual download)
+  python run.py auditor --url <report page>            # load one report discovery can't find
   python run.py reparse                             # re-parse saved raw pages after a parser fix
   python run.py zillow  [--kind county|zip] [--file path | --url url]   # monthly; skips unchanged files
   python run.py backup                                # verified backup, copied to OneDrive
@@ -93,7 +94,7 @@ def main(argv=None) -> int:
     p.add_argument("--commercial", action="store_true", help="also load commercial sales")
     p.add_argument("--refetch", action="store_true", help="re-pull reports already loaded")
     p.add_argument("--file", help="local file: Redfin CSV/TSV(.gz), county export, or Zillow CSV")
-    p.add_argument("--url", help="Redfin or Zillow file URL override")
+    p.add_argument("--url", help="one Franklin report page, or a Redfin or Zillow file URL")
     p.add_argument("--kind", choices=list(zillow.URLS), help="Zillow file: county or zip (default both)")
     p.add_argument("--export", help="dir to write view CSVs")
     p.add_argument("-v", action="store_true")
@@ -103,7 +104,10 @@ def main(argv=None) -> int:
     con = db.connect(a.db, a.server)
     if a.cmd in ("auditor", "all"):
         types = ("residential", "commercial") if a.commercial else ("residential",)
-        print("auditor:", auditor.run(con, a.since, types, a.refetch))
+        if a.cmd == "auditor" and a.url:
+            print("auditor new rows:", auditor.load_url(con, a.url))
+        else:
+            print("auditor:", auditor.run(con, a.since, types, a.refetch))
     if a.cmd == "backup":
         print("backup:", backup.run(con))
     if a.cmd == "reparse":
