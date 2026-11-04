@@ -122,3 +122,20 @@ SELECT
     parsed_rows - reported_count AS diff
 FROM dbo.auditor_report
 WHERE reported_count IS NOT NULL;
+GO
+
+-- Zillow ZHVI with year-over-year change, per county and per ZIP.
+-- Attribution required wherever shown: "Zillow Home Value Index (ZHVI), Zillow Group".
+CREATE OR ALTER VIEW dbo.v_zillow_yoy AS
+SELECT
+    c.region_type,
+    c.region_name,
+    c.county,
+    c.month,
+    c.zhvi,
+    p.zhvi AS zhvi_prior_year,
+    ROUND(100.0 * (c.zhvi - p.zhvi) / NULLIF(p.zhvi, 0), 1) AS zhvi_yoy_pct
+FROM dbo.zillow_zhvi c
+LEFT JOIN dbo.zillow_zhvi p
+    ON p.region_type = c.region_type AND p.region_name = c.region_name
+    AND p.month = DATEADD(year, -1, c.month);

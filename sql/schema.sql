@@ -75,3 +75,36 @@ BEGIN
         columns NVARCHAR(MAX) NOT NULL
     );
 END
+GO
+
+-- Zillow Home Value Index, monthly, long format. Replaced per region_type on each load
+-- (Zillow revises history). Attribution to Zillow is required wherever this data is shown.
+IF OBJECT_ID('dbo.zillow_zhvi', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.zillow_zhvi (
+        -- county or zip
+        region_type NVARCHAR(10) NOT NULL,
+        -- County name ("Franklin County") or 5-digit ZIP
+        region_name NVARCHAR(100) NOT NULL,
+        -- Franklin, Delaware or Licking (for ZIPs: Zillow's county for that ZIP)
+        county NVARCHAR(20) NOT NULL,
+        -- First day of the month
+        month DATE NOT NULL,
+        zhvi FLOAT NOT NULL,
+        PRIMARY KEY (region_type, region_name, month)
+    );
+END
+GO
+
+-- One row per Zillow load. last_modified lets the loader skip unchanged files.
+IF OBJECT_ID('dbo.zillow_load_log', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.zillow_load_log (
+        loaded_at DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(),
+        region_type NVARCHAR(10) NOT NULL,
+        source NVARCHAR(1000) NOT NULL,
+        last_modified NVARCHAR(100),
+        rows_loaded INT NOT NULL,
+        attribution NVARCHAR(400) NOT NULL
+    );
+END

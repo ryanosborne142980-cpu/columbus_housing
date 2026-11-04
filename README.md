@@ -7,6 +7,7 @@ Weekly Columbus-area housing trends from free, legitimate sources, landed in SQL
 | Franklin County Auditor weekly sales reports | Parcel-level closed sales by ZIP | Published Sundays (Fri–Thu week) | Ground-truth prices and volume, ZIP-level |
 | Delaware / Licking County Auditor sales exports | Parcel-level closed sales | Manual, on request | Same as Franklin, loaded from a file you obtain |
 | Redfin Data Center weekly tracker | Columbus metro + Franklin/Delaware/Licking county rows, rolling 4-week | Thursdays | Leading indicators: new listings, pendings, inventory, DOM, price drops |
+| Zillow Home Value Index (ZHVI) | Franklin/Delaware/Licking county rows + their ZIPs, monthly, back to 2000 | Monthly (16th) | Long history for YoY and a seasonal baseline; smoothed, seasonally adjusted. **Attribution to Zillow required.** |
 
 ## Setup
 Needs SQL Server (default: local instance `.\ROSBO_SQL`, Windows auth) and ODBC Driver 18 for SQL Server.
@@ -30,6 +31,8 @@ python run.py reparse
 python run.py county-file --county Delaware --file sales.xlsx   # CSV, TSV, .xls or .xlsx
 # Download or import the Redfin market-tracker dataset for leading indicators.
 python run.py redfin --file <download>         # from https://www.redfin.com/news/data-center/
+# Load Zillow home values (monthly; skips files unchanged since the last load).
+python run.py zillow                           # or --kind zip --file <CSV from zillow.com/research/data>
 # Generate the reports and export every view to CSV files in the target folder.
 python run.py report --export out/             # summary + CSVs of every view
 # Run the regular weekly job for Franklin County and Redfin data only.
@@ -52,6 +55,7 @@ Re-runs are idempotent: loaded reports are skipped, and sales are keyed on count
 - `v_report_validation`: parsed rows vs the county's own count. Non-zero `diff` means the parser has drifted.
 
 ## Known limits
+- **Zillow data terms:** free for public use with clear attribution to Zillow. `report` prints the source line and `--export` writes `ATTRIBUTION.txt`; keep that line on anything you publish. Zillow's Terms of Use bar scraping, so the loader only downloads the published CSVs, at most once per update. Run it monthly by hand rather than in the weekly job.
 - **Franklin reports stay online only ~30 weeks.** Every fetched page is saved verbatim in `raw_page`, so old weeks can be re-parsed after they disappear. Run the weekly job without gaps: a missed week is lost for good, and Franklin YoY needs a full year of captured weeks.
 - **Delaware and Licking are manual and only as fresh as your last file.** Their YoY needs two years of history in the export. Fairfield, Union, Madison and Pickaway are still missing.
 - **No property attributes** (sqft, beds, year built), so medians move with mix shift. Treat moves under ~3% as noise until you enrich via parcel lookup.

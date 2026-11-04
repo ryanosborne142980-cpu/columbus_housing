@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeline import auditor, county_file, db, http, redfin
+from pipeline import auditor, county_file, db, http, redfin, zillow
 
 FX = Path(__file__).parent / "fixtures"
 
@@ -22,7 +22,8 @@ def _con():
 def con(_con):
     # Empty every table so each test starts clean.
     _con.execute(f"DROP TABLE IF EXISTS {redfin.TABLE}")
-    for t in ("auditor_sale", "auditor_report", "redfin_load_log", "raw_page"):
+    for t in ("auditor_sale", "auditor_report", "redfin_load_log", "raw_page", "zillow_zhvi",
+              "zillow_load_log"):
         _con.execute(f"DELETE FROM {t}")
     _con.commit()
     return _con
@@ -205,6 +206,7 @@ def fake_net(monkeypatch):
     monkeypatch.setattr(http, "_last_hit", {})
     monkeypatch.setattr(http.time, "sleep", sleeps.append)
     monkeypatch.setattr(http._session, "get", lambda url, **kw: routes[url].pop(0))
+    monkeypatch.setattr(http._session, "request", lambda m, url, **kw: routes[url].pop(0))
     return routes, sleeps
 
 
@@ -227,6 +229,40 @@ def test_http_crawl_delay_and_retry_after(fake_net):
     assert http.get("https://c.test/p").status_code == 200
     assert 7.0 in sleeps                    # honored Retry-After
     assert any(s > 9 for s in sleeps if s != 7.0)  # throttled to Crawl-delay, not 2s
+
+
+def test_zillow_keeps_three_ohio_counties_and_their_zips(con):
+    assert zillow.load(con, "county", file=str(FX / "zillow_county.csv")) == 11  # one blank month
+    assert zillow.load(con, "zip", file=str(FX / "zillow_zip.csv")) == 8
+    got = {tuple(r) for r in con.execute("SELECT DISTINCT region_type, region_name, county FROM zillow_zhvi")}
+    assert got == {("county", "Franklin County", "Franklin"), ("county", "Delaware County", "Delaware"),
+                   ("county", "Licking County", "Licking"), ("zip", "43215", "Franklin"),
+                   ("zip", "43035", "Delaware")}  # PA/MA Franklin, Cuyahoga, Columbus GA dropped
+    r = con.execute("SELECT zhvi, zhvi_prior_year, zhvi_yoy_pct FROM v_zillow_yoy WHERE region_name"
+                    " = 'Franklin County' AND month = '2026-10-01'").fetchone()
+    assert tuple(r) == (302000.0, 281000.0, 7.5)
+    # Reload replaces rather than duplicates; every load records the required attribution.
+    assert zillow.load(con, "county", file=str(FX / "zillow_county.csv")) == 11
+    assert con.execute("SELECT COUNT(*) FROM zillow_zhvi WHERE region_type = 'county'").fetchone()[0] == 11
+    assert {r[0] for r in con.execute("SELECT attribution FROM zillow_load_log")} == {zillow.ATTRIBUTION}
+
+
+def test_zillow_skips_download_when_file_unchanged(con, monkeypatch):
+    lm = "Fri, 16 Oct 2026 01:51:26 GMT"
+    body = (FX / "zillow_county.csv").read_bytes()
+    gets = []
+
+    class R:
+        def __init__(self, content=b""):
+            self.headers, self.content = {"Last-Modified": lm}, content
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(zillow.http, "head", lambda url, **kw: R())
+    monkeypatch.setattr(zillow.http, "get", lambda url, **kw: gets.append(url) or R(body))
+    assert zillow.load(con, "county") == 11
+    assert zillow.load(con, "county") is None  # same Last-Modified: no second download
+    assert len(gets) == 1
 
 
 def test_redfin_gzip_read_in_chunks(con, monkeypatch, tmp_path):
