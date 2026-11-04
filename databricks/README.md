@@ -1,12 +1,19 @@
-# Bronze on Databricks
+# Bronze and silver on Databricks
 
-Lands source files raw and append-only with Auto Loader, in a pipeline deployed from this folder. Tables:
-`bronze_auditor_sale`, `bronze_auditor_report` and `bronze_zillow_county`.
+Lands source files raw and append-only with Auto Loader, then builds typed, de-duplicated tables, in one pipeline
+deployed from this folder.
+
+| Bronze (raw, append-only) | Silver (typed, latest version) |
+|---|---|
+| `bronze_auditor_sale` | `silver_sale`: residential, $10k or more, multi-parcel deeds counted once |
+| `bronze_auditor_report` | `silver_report`: the latest version of each report |
+| `bronze_zillow_county` | `silver_zillow_county`: one row per month for three Ohio counties, from the latest release |
 
 | Piece | Where |
 |---|---|
 | Schema, volume, pipeline | [databricks.yml](databricks.yml) |
-| Auto Loader table | [pipelines/bronze.py](pipelines/bronze.py) |
+| Auto Loader tables | [pipelines/bronze.py](pipelines/bronze.py) |
+| Silver tables and data quality rules | [pipelines/silver.py](pipelines/silver.py) |
 | Zillow file to volume | [land_zillow.py](land_zillow.py) |
 | New SQL Server rows to volume | [land_sql_tables.py](land_sql_tables.py) |
 
@@ -17,7 +24,9 @@ Lands source files raw and append-only with Auto Loader, in a pipeline deployed 
 2. `land_sql_tables.py` exports `auditor_sale` and `auditor_report` rows added since its last run to CSV and uploads
    them. SQL Server only listens on localhost, so Databricks can't connect to it directly.
 3. Auto Loader picks up new files and appends their rows to the matching bronze table.
-4. Every value stays a string. Each row records `source_file`, `source_modified_at` and `loaded_at`.
+4. Bronze keeps every value as a string. Each row records `source_file`, `source_modified_at` and `loaded_at`.
+5. Silver sets types, picks the latest version of each row, and applies data quality rules. A row with no sale date,
+   sale price or Zillow value is dropped; a missing ZIP or report week is only counted.
 
 ## Run it
 
@@ -40,16 +49,23 @@ On Databricks Free Edition, 2026-11-04:
   parsed-row totals. A sample sale matched field by field.
 - **Re-run:** a second run added no rows, and `loaded_at` stayed the same.
 - **Nothing new:** landing again with no new rows uploads no file.
+- **Silver against SQL Server:** `silver_sale` matches `v_sale_clean` on 12,038 sales, price total, parcel count and
+  date range. Counts and medians match for all 31 weeks in `v_county_week`. `silver_report` and
+  `silver_zillow_county` match on row counts and totals.
 
 **Not tested yet:**
 
 - **Schema drift.** Zillow adds a column every month, so the next release should trigger it. In the
   `addNewColumns` mode set here, Databricks documents that the stream stops once, adds the column, and continues
   on restart.
-- **A second file.** Each monthly file holds Zillow's full history, so appending it will repeat every region.
-  Picking the latest release belongs in silver.
+- **A second Zillow file.** Each monthly file holds Zillow's full history, so bronze will repeat every region.
+  Silver is written to pick the latest release, but no second release has arrived to prove it.
+- **Silver's latest-version logic on real repeats.** Every row has only one version so far.
+- **Data quality rules dropping a bad row.** No bad row has been supplied to them yet.
 - **Replay from the volume.**
 - **A later batch of new rows on real data.** Only a test on sample rows has covered that so far.
+
+`silver_sale` repeats the rules in `v_sale_clean`, so a change to one has to be made in both.
 
 Credit Zillow wherever this data is shown. See [decision 0006](../docs/decisions/0006-zillow-monthly-csv.md) and
 [decision 0008](../docs/decisions/0008-land-files-then-auto-loader.md).

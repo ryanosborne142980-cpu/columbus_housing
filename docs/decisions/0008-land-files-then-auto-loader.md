@@ -32,5 +32,7 @@ and validates the county data.
   has to pick the latest.
 - **Each monthly Zillow file repeats its full history,** so bronze will hold repeated rows by design. Silver has to
   pick the latest release.
+- **Silver repeats SQL Server's cleaning rules,** so the two have to be changed together. They currently match on every
+  total and weekly median checked.
 - **This runs on Free Edition.** That shows familiarity with the tools, not production experience, and Free Edition
   isn't for commercial use.
