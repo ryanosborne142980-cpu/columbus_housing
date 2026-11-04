@@ -1,0 +1,39 @@
+# Bronze layer on Databricks, deployed from code.
+#   databricks bundle deploy -p columbus
+#   databricks bundle run bronze -p columbus
+bundle:
+  name: columbus_housing
+
+workspace:
+  # Local CLI profile name; the workspace URL stays out of the repo.
+  profile: columbus
+
+resources:
+  schemas:
+    columbus_housing:
+      catalog_name: workspace
+      name: columbus_housing
+      comment: Columbus-area housing data
+
+  volumes:
+    raw:
+      catalog_name: workspace
+      schema_name: ${resources.schemas.columbus_housing.name}
+      name: raw
+      volume_type: MANAGED
+      comment: Source files exactly as received. Never edited, so bronze can be replayed.
+
+  pipelines:
+    bronze:
+      name: columbus_housing_bronze
+      catalog: workspace
+      schema: ${resources.schemas.columbus_housing.name}
+      serverless: true
+      continuous: false
+      libraries:
+        - file:
+            path: pipelines/bronze.py
+
+targets:
+  dev:
+    default: true
