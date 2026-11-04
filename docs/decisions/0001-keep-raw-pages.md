@@ -19,8 +19,8 @@ The listing page and guessed-URL checks aren't saved, and neither are files from
 
 - **It has already paid off.** April 2026 pages used a different format, and two weeks loaded no sales. After
   the parser fix, a re-parse recovered 734 sales with no new requests.
-- **The database will soon hold data that can't be fetched again,** so it needs a backup. SQL Server shows no
-  backups of this database as of 2026-11-04.
+- **The database will soon hold data that can't be fetched again,** so it needs backups. `python run.py backup`
+  copies one to OneDrive, but nothing schedules it yet.
 - **Pages are stored as decoded text, not original bytes.** They aren't byte-exact, though no damage is known.
 - **A re-parse adds missed sales and refreshes report summaries, but doesn't correct stored sales.** Price is part
   of the sale key, so a corrected price would be inserted next to the wrong one. Delete the affected rows first.

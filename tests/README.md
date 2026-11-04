@@ -101,11 +101,17 @@ code handles the format we expect; they do not prove the live sources still look
 - **test_zillow_skips_download_when_file_unchanged**: With a fake network, a second load sees the same
   Last-Modified date and skips the download.
 
+### Backups
+
+- **test_backup_prune_keeps_newest_of_that_database_only**: Keeps the newest backups and removes older ones, without
+  touching other files or backups of a similarly named database such as `columbus_housing_test`.
+
 ## Not covered
 
 - Discovery against the real county website and the full `run`, because they need the network. The
   offline discovery test uses a fake site, so it won't notice if the county changes its address
   pattern.
 - The printed report from `run.py report`.
+- Taking a real backup, because the CI container and local paths differ. It was tested by hand with a restore.
 - Real pages and files. Saving one real Franklin report page into `fixtures/` and adding a test for it
   is the next most useful test to write.

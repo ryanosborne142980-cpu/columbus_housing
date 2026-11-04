@@ -9,6 +9,7 @@ How to run the pipeline, check that it worked, and recover when it didn't. Run c
 | Franklin County | Sundays | `python run.py all --commercial` | Weekly, Monday morning |
 | Zillow | 16th of the month | `python run.py zillow` | Monthly, after the 16th |
 | Redfin | Thursdays | `python run.py redfin --file <download>` | When you download a new file |
+| Database backup | n/a | `python run.py backup` | After each load, until scheduled |
 | Delaware, Licking | On request | `python run.py county-file --county <name> --file <file>` | When you receive a file |
 
 `all` loads Franklin and prints the report. It skips Redfin unless you pass `--file` or `--url`.
@@ -90,14 +91,31 @@ python run.py reparse
 already stored. Price is part of the sale key, so a corrected price would be added next to the wrong one. If a
 bug stored wrong values, back up the database, delete that report's rows from `auditor_sale`, and then re-parse.
 
+## Back up and restore
+
+```bash
+python run.py backup
+```
+
+This makes a verified, compressed backup and copies it to `%OneDrive%/Backups/columbus_housing`, keeping the newest
+8. Set `COLUMBUS_HOUSING_BACKUP_DIR` to use another folder. Copy-only backups leave the database's recovery settings
+alone. A file in that folder isn't proof it reached the cloud, so check that OneDrive shows it as synced.
+
+**One-time setup:** SQL Server writes the file as its service account, so that account needs one folder it can write
+to. Create `%LOCALAPPDATA%/columbus_housing/backups`, or set `COLUMBUS_HOUSING_BACKUP_STAGING`, and give the account
+Modify access. Find the account with `SELECT service_account FROM sys.dm_server_services`.
+
+**Restore:** copy the `.bak` into the staging folder, because SQL Server may not be able to read OneDrive. Then run
+`RESTORE DATABASE` under a new name with `MOVE` for each file, and compare row counts before replacing anything. This
+was tested on 2026-11-04: every table count matched, and `raw_page` matched on total bytes and content hashes.
+
 ## Known gaps
 
 As of 2026-11-04. Move these to issues as they get scheduled.
 
 - **The weekly job isn't scheduled.** It only runs by hand. Set up Windows Task Scheduler with the repo root
   as the working directory, and make sure the task can see `COLUMBUS_HOUSING_SERVER`.
-- **The database has never been backed up.** `raw_page` is the only copy of pages that will leave the county
-  site.
+- **Backups aren't scheduled.** They only run when someone runs `python run.py backup`.
 - **Two Franklin weeks are missing:**
   - May 29 – Jun 4, 2026 is online at `/News-articles/20260604-Residential-Sales-Report` (569 sales).
     Discovery only tries dates within a day of each Sunday, so it misses this page.
