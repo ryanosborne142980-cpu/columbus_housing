@@ -382,3 +382,19 @@ def test_run_pipeline_ignores_a_finished_update_from_before_this_run(monkeypatch
     monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: Done())
     monkeypatch.setattr(rp.time, "sleep", lambda seconds: None)
     assert rp.run("dev") == 1  # a failed start must not borrow an earlier update's success
+
+
+def test_run_problems_flags_runs_that_look_finished_but_failed(con):
+    today = date(2026, 11, 9)
+    healthy = {"reports": 1, "new_rows": 300, "skipped": 8}
+    assert "older" not in " ".join(auditor.run_problems(con, healthy, today))
+    assert auditor.run_problems(con, healthy, today)  # empty table: nothing is fresh
+
+    con.execute("INSERT INTO auditor_report (report_url, report_type, period_end) "
+                "VALUES ('r', 'residential', '2026-11-05')")
+    assert auditor.run_problems(con, healthy, today) == []
+    assert auditor.run_problems(con, {"reports": 0, "new_rows": 0, "skipped": 9}, today) == []  # nothing new
+    assert "discovery found no reports" in auditor.run_problems(
+        con, {"reports": 0, "new_rows": 0, "skipped": 0}, today)
+    assert any("couldn't be fetched" in x for x in auditor.run_problems(con, {**healthy, "failed": 2}, today))
+    assert any("days ago" in x for x in auditor.run_problems(con, healthy, date(2026, 12, 1)))

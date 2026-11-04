@@ -104,6 +104,11 @@ code handles the format we expect; they do not prove the live sources still look
 - **test_zillow_skips_download_when_file_unchanged**: With a fake network, a second load sees the same
   Last-Modified date and skips the download.
 
+### Run health
+
+- **test_run_problems_flags_runs_that_look_finished_but_failed**: A run counts as failed if pages couldn't be fetched,
+  discovery found nothing, or the newest week is over 14 days old. A week with nothing new to load doesn't.
+
 ### Exports
 
 - **test_export_only_sends_new_rows**: Exports two sales, finds nothing new on a second run, then exports only a third

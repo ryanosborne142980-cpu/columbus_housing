@@ -102,12 +102,15 @@ def main(argv=None) -> int:
     logging.basicConfig(level=logging.DEBUG if a.v else logging.INFO, format="%(levelname)s %(message)s")
 
     con = db.connect(a.db, a.server)
+    problems = []
     if a.cmd in ("auditor", "all"):
         types = ("residential", "commercial") if a.commercial else ("residential",)
         if a.cmd == "auditor" and a.url:
             print("auditor new rows:", auditor.load_url(con, a.url))
         else:
-            print("auditor:", auditor.run(con, a.since, types, a.refetch))
+            stats = auditor.run(con, a.since, types, a.refetch)
+            print("auditor:", stats)
+            problems = auditor.run_problems(con, stats)
     if a.cmd == "backup":
         print("backup:", backup.run(con))
     if a.cmd == "reparse":
@@ -134,7 +137,9 @@ def main(argv=None) -> int:
             print(f"zillow {k}:", "unchanged, skipped" if n is None else f"{n} rows")
     if a.cmd in ("report", "all"):
         report(con, a.export)
-    return 0
+    for problem in problems:
+        logging.error("run problem: %s", problem)
+    return 1 if problems else 0
 
 
 if __name__ == "__main__":
