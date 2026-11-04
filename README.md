@@ -53,6 +53,8 @@ python run.py report --export out/             # summary + CSVs of every view
 # Run the regular weekly job for Franklin County and Redfin data only.
 python run.py all --since 2026-10-01           # weekly job (Franklin + Redfin; not county files)
 ```
+Architecture diagram: [`docs/architecture.html`](docs/architecture.html).
+
 Schedule `python run.py all` weekly (Mon morning; both sources have published by then).
 Re-runs are idempotent: loaded reports are skipped, and sales are keyed on county+parcel+date+price.
 

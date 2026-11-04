@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Columbus Housing Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column; the flow diagram breaks out wider and scrolls on its own at phone width. */
+:root {
+  --bg: #f4f6f7;
+  --surface: #ffffff;
+  --ink: #1b232b;
+  --muted: #5b6772;
+  --line: #c6cdd3;
+  --src: #3d5a80;
+  --code: #22786d;
+  --store: #9a5a14;
+  --view: #4f7424;
+  --warn: #a8461f;
+  --sans: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171c; --surface: #1a2128; --ink: #e4e9ee; --muted: #9aa6b1; --line: #36424d;
+    --src: #8fb0dd; --code: #5fc3b4; --store: #e0a35c; --view: #a3c76a; --warn: #f08a5d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171c; --surface: #1a2128; --ink: #e4e9ee; --muted: #9aa6b1; --line: #36424d;
+  --src: #8fb0dd; --code: #5fc3b4; --store: #e0a35c; --view: #a3c76a; --warn: #f08a5d;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.6 var(--sans);
+}
+.wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 40px 16px 64px;
+  display: grid;
+  gap: 40px;
+}
+.col { max-width: 760px; display: grid; gap: 14px; min-width: 0; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-size: 19px; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 65ch; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+.eyebrow {
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--code);
+}
+.diagram {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 16px;
+}
+.diagram svg { display: block; width: 100%; min-width: 1060px; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 14px; height: 10px; border: 2px solid; border-radius: 2px; }
+.sw.dash { border-style: dashed; }
+
+/* SVG styling through tokens */
+.lane { font: 600 11px var(--sans); letter-spacing: 0.08em; text-transform: uppercase; fill: var(--muted); }
+.node rect { fill: var(--surface); stroke-width: 1.5; }
+.node .t { font: 600 13px var(--sans); fill: var(--ink); }
+.node .t.m { font: 600 12.5px var(--mono); }
+.node .s { font: 400 11px var(--sans); fill: var(--muted); }
+.src rect { stroke: var(--src); }
+.code rect { stroke: var(--code); }
+.store rect { stroke: var(--store); }
+.view rect { stroke: var(--view); }
+.manual rect { stroke-dasharray: 5 4; }
+.edge { fill: none; stroke: var(--muted); stroke-width: 1.3; }
+.edge.back { stroke-dasharray: 4 3; }
+.arrowhead { fill: var(--muted); }
+.region { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.note { font: 400 11px var(--sans); fill: var(--muted); }
+.note.m { font: 400 11px var(--mono); }
+
+.steps { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; counter-reset: s; }
+.steps li { display: grid; grid-template-columns: 28px 1fr; gap: 12px; counter-increment: s; }
+.steps li::before {
+  content: counter(s); font: 600 13px var(--mono); color: var(--code);
+  border: 1.5px solid var(--code); border-radius: 50%; width: 26px; height: 26px;
+  display: grid; place-items: center;
+}
+.steps li > div { min-width: 0; }
+
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.tbl { overflow-x: auto; }
+th, td { text-align: left; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+td:first-child { white-space: nowrap; }
+
+.gaps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.gaps li { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; }
+.pill {
+  font: 600 11px var(--sans); text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 2px 8px; border-radius: 99px; border: 1px solid currentColor; white-space: nowrap;
+}
+.pill.high { color: var(--warn); }
+.pill.med { color: var(--store); }
+.pill.low { color: var(--muted); }
+a { color: var(--code); }
+a:focus-visible { outline: 2px solid var(--code); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="col">
+    <div class="eyebrow">Architecture</div>
+    <h1>Columbus Housing Pipeline</h1>
+    <p class="lede">How sales and market data for Franklin, Delaware and Licking counties get from public sources into SQL Server, and from there into the trend report.</p>
+  </header>
+
+  <section style="display:grid;gap:14px;min-width:0">
+    <div class="diagram" role="img" aria-label="Data flow: five sources feed four Python loaders, which write through db.py helpers into SQL Server tables; raw Franklin pages are kept for re-parsing; views summarize sales and Zillow values; run.py report reads the views and the Redfin table.">
+      <svg viewBox="0 0 1240 790" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+        </defs>
+
+        <text class="lane" x="20" y="28">Sources</text>
+        <text class="lane" x="270" y="28">Loaders (run.py)</text>
+        <text class="lane" x="510" y="28">Writes</text>
+        <text class="lane" x="750" y="28">Tables</text>
+        <text class="lane" x="1000" y="28">Views</text>
+
+        <rect class="region" x="735" y="46" width="497" height="630" rx="8"/>
+        <text class="note m" x="1220" y="666" text-anchor="end">SQL Server  .\ROSBO_SQL / columbus_housing</text>
+
+        <!-- Sources -->
+        <g class="node src"><rect x="20" y="70" width="200" height="64" rx="5"/>
+          <text class="t" x="32" y="96">Franklin County Auditor</text><text class="s" x="32" y="116">Weekly pages, ~30 wks online</text></g>
+        <g class="node src manual"><rect x="20" y="160" width="200" height="64" rx="5"/>
+          <text class="t" x="32" y="186">Delaware County Auditor</text><text class="s" x="32" y="206">Emailed export, manual</text></g>
+        <g class="node src manual"><rect x="20" y="250" width="200" height="64" rx="5"/>
+          <text class="t" x="32" y="276">Licking County Auditor</text><text class="s" x="32" y="296">File by request, manual</text></g>
+        <g class="node src manual"><rect x="20" y="380" width="200" height="64" rx="5"/>
+          <text class="t" x="32" y="406">Redfin Data Center</text><text class="s" x="32" y="426">Weekly file, manual download</text></g>
+        <g class="node src"><rect x="20" y="520" width="200" height="64" rx="5"/>
+          <text class="t" x="32" y="546">Zillow Research (ZHVI)</text><text class="s" x="32" y="566">Monthly CSVs, county + ZIP</text></g>
+
+        <!-- Loaders -->
+        <g class="node code"><rect x="270" y="70" width="190" height="64" rx="5"/>
+          <text class="t m" x="282" y="96">auditor.py</text><text class="s" x="282" y="116">find, fetch, parse reports</text></g>
+        <text class="note" x="282" y="152">via http.py: robots.txt, 2s gap</text>
+        <g class="node code"><rect x="270" y="205" width="190" height="64" rx="5"/>
+          <text class="t m" x="282" y="231">county_file.py</text><text class="s" x="282" y="251">map headers, residential only</text></g>
+        <g class="node code"><rect x="270" y="380" width="190" height="64" rx="5"/>
+          <text class="t m" x="282" y="406">redfin.py</text><text class="s" x="282" y="426">chunked read, keep 4 regions</text></g>
+        <g class="node code"><rect x="270" y="520" width="190" height="64" rx="5"/>
+          <text class="t m" x="282" y="546">zillow.py</text><text class="s" x="282" y="566">skip if unchanged, wide→long</text></g>
+
+        <!-- Writes -->
+        <g class="node code"><rect x="510" y="70" width="190" height="64" rx="5"/>
+          <text class="t m" x="522" y="96">save_raw</text><text class="s" x="522" y="116">add page if content is new</text></g>
+        <g class="node code"><rect x="510" y="150" width="190" height="64" rx="5"/>
+          <text class="t m" x="522" y="176">upsert_report</text><text class="s" x="522" y="196">update, else insert</text></g>
+        <g class="node code"><rect x="510" y="230" width="190" height="64" rx="5"/>
+          <text class="t m" x="522" y="256">insert_new_sales</text><text class="s" x="522" y="276">stage, add new keys only</text></g>
+        <g class="node code"><rect x="510" y="380" width="190" height="64" rx="5"/>
+          <text class="t m" x="522" y="406">replace_table</text><text class="s" x="522" y="426">drop and rebuild, log row</text></g>
+        <g class="node code"><rect x="510" y="520" width="190" height="64" rx="5"/>
+          <text class="t m" x="522" y="546">inline SQL</text><text class="s" x="522" y="566">delete kind, insert, log row</text></g>
+
+        <!-- Tables -->
+        <g class="node store"><rect x="750" y="70" width="200" height="64" rx="5"/>
+          <text class="t m" x="762" y="96">raw_page</text><text class="s" x="762" y="116">fetched HTML, verbatim</text></g>
+        <g class="node store"><rect x="750" y="150" width="200" height="64" rx="5"/>
+          <text class="t m" x="762" y="176">auditor_report</text><text class="s" x="762" y="196">one row per report or file</text></g>
+        <g class="node store"><rect x="750" y="230" width="200" height="64" rx="5"/>
+          <text class="t m" x="762" y="256">auditor_sale</text><text class="s" x="762" y="276">key: county, parcel, date, price</text></g>
+        <g class="node store"><rect x="750" y="360" width="200" height="64" rx="5"/>
+          <text class="t m" x="762" y="386">redfin_columbus_weekly</text><text class="s" x="762" y="406">rebuilt each load</text></g>
+        <g class="node store"><rect x="750" y="440" width="200" height="64" rx="5"/>
+          <text class="t m" x="762" y="466">redfin_load_log</text><text class="s" x="762" y="486">one row per load</text></g>
+        <g class="node store"><rect x="750" y="520" width="200" height="64" rx="5"/>
+          <text class="t m" x="762" y="546">zillow_zhvi</text><text class="s" x="762" y="566">monthly, long format</text></g>
+        <g class="node store"><rect x="750" y="600" width="200" height="48" rx="5"/>
+          <text class="t m" x="762" y="620">zillow_load_log</text><text class="s" x="762" y="638">Last-Modified per load</text></g>
+
+        <!-- Views -->
+        <g class="node view"><rect x="1000" y="150" width="220" height="64" rx="5"/>
+          <text class="t m" x="1012" y="176">v_report_validation</text><text class="s" x="1012" y="196">parsed rows vs county count</text></g>
+        <g class="node view"><rect x="1000" y="230" width="220" height="64" rx="5"/>
+          <text class="t m" x="1012" y="256">v_sale_clean</text><text class="s" x="1012" y="276">residential, $10k+, deduped</text></g>
+        <g class="node view"><rect x="1030" y="314" width="190" height="48" rx="5"/>
+          <text class="t m" x="1042" y="334">v_county_week</text><text class="s" x="1042" y="352">weekly median by county</text></g>
+        <g class="node view"><rect x="1030" y="372" width="190" height="48" rx="5"/>
+          <text class="t m" x="1042" y="392">v_county_rolling4</text><text class="s" x="1042" y="410">4-week median, YoY</text></g>
+        <g class="node view"><rect x="1030" y="430" width="190" height="48" rx="5"/>
+          <text class="t m" x="1042" y="450">v_zip_month</text><text class="s" x="1042" y="468">ZIP monthly median, YoY</text></g>
+        <g class="node view"><rect x="1000" y="520" width="220" height="64" rx="5"/>
+          <text class="t m" x="1012" y="546">v_zillow_yoy</text><text class="s" x="1012" y="566">ZHVI with YoY, county + ZIP</text></g>
+
+        <!-- Report -->
+        <g class="node code"><rect x="1000" y="710" width="220" height="64" rx="5"/>
+          <text class="t m" x="1012" y="736">run.py report</text><text class="s" x="1012" y="756">console summary, CSV export</text></g>
+
+        <!-- Edges: sources to loaders -->
+        <path class="edge" marker-end="url(#ah)" d="M220,102 L268,102"/>
+        <path class="edge" marker-end="url(#ah)" d="M220,192 C245,192 245,237 268,237"/>
+        <path class="edge" marker-end="url(#ah)" d="M220,282 C245,282 245,237 268,237"/>
+        <path class="edge" marker-end="url(#ah)" d="M220,412 L268,412"/>
+        <path class="edge" marker-end="url(#ah)" d="M220,552 L268,552"/>
+
+        <!-- Loaders to writes -->
+        <path class="edge" marker-end="url(#ah)" d="M460,102 L508,102"/>
+        <path class="edge" marker-end="url(#ah)" d="M460,102 C485,102 485,178 508,178"/>
+        <path class="edge" marker-end="url(#ah)" d="M460,102 C485,102 485,258 508,258"/>
+        <path class="edge" marker-end="url(#ah)" d="M460,237 C485,237 485,190 508,190"/>
+        <path class="edge" marker-end="url(#ah)" d="M460,237 C485,237 485,266 508,266"/>
+        <path class="edge" marker-end="url(#ah)" d="M460,412 L508,412"/>
+        <path class="edge" marker-end="url(#ah)" d="M460,552 L508,552"/>
+
+        <!-- Writes to tables -->
+        <path class="edge" marker-end="url(#ah)" d="M700,102 L748,102"/>
+        <path class="edge" marker-end="url(#ah)" d="M700,182 L748,182"/>
+        <path class="edge" marker-end="url(#ah)" d="M700,262 L748,262"/>
+        <path class="edge" marker-end="url(#ah)" d="M700,412 C725,412 725,392 748,392"/>
+        <path class="edge" marker-end="url(#ah)" d="M700,412 C725,412 725,472 748,472"/>
+        <path class="edge" marker-end="url(#ah)" d="M700,552 L748,552"/>
+        <path class="edge" marker-end="url(#ah)" d="M700,552 C725,552 725,624 748,624"/>
+
+        <!-- reparse: raw_page back to auditor.py -->
+        <path class="edge back" marker-end="url(#ah)" d="M850,70 L850,54 L365,54 L365,68"/>
+        <text class="note m" x="600" y="48" text-anchor="middle">run.py reparse: re-read saved pages, no network</text>
+
+        <!-- Tables to views -->
+        <path class="edge" marker-end="url(#ah)" d="M950,182 L998,182"/>
+        <path class="edge" marker-end="url(#ah)" d="M950,262 L998,262"/>
+        <path class="edge" d="M1016,294 L1016,454"/>
+        <path class="edge" marker-end="url(#ah)" d="M1016,338 L1028,338"/>
+        <path class="edge" marker-end="url(#ah)" d="M1016,396 L1028,396"/>
+        <path class="edge" marker-end="url(#ah)" d="M1016,454 L1028,454"/>
+        <path class="edge" marker-end="url(#ah)" d="M950,552 L998,552"/>
+
+        <path class="edge" marker-end="url(#ah)" d="M1110,676 L1110,708"/>
+        <text class="note" x="1098" y="698" text-anchor="end">reads views and Redfin table</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="sw" style="border-color:var(--src)"></i>Public source, fetched by code</span>
+      <span><i class="sw dash" style="border-color:var(--src)"></i>Manual file, you obtain it</span>
+      <span><i class="sw" style="border-color:var(--code)"></i>Python code</span>
+      <span><i class="sw" style="border-color:var(--store)"></i>Table</span>
+      <span><i class="sw" style="border-color:var(--view)"></i>View, rebuilt on every connect</span>
+    </div>
+  </section>
+
+  <section class="col">
+    <h2>Run order</h2>
+    <ol class="steps">
+      <li><div><code>python run.py all --since &lt;date&gt; --file &lt;redfin download&gt;</code> weekly, Monday morning. Runs the Franklin loader, then Redfin, then the report. Without <code>--file</code> or <code>--url</code>, Redfin is skipped. Don't miss a week: Franklin pages drop off after about 30 weeks.</div></li>
+      <li><div><code>python run.py county-file --county Delaware --file &lt;file&gt;</code> whenever a county file arrives. Same for Licking. Not part of <code>all</code>.</div></li>
+      <li><div><code>python run.py zillow</code> monthly, after Zillow updates on the 16th. Skips files unchanged since the last load. Not part of <code>all</code>.</div></li>
+      <li><div><code>python run.py reparse</code> after a parser fix. Re-reads every saved Franklin page from <code>raw_page</code>, no network.</div></li>
+      <li><div><code>python run.py report --export out/</code> any time, for the summary and a CSV of each view, plus <code>ATTRIBUTION.txt</code> for Zillow.</div></li>
+    </ol>
+    <p class="lede">Each connect creates the database and any missing tables, then rebuilds the views. <code>python pipeline/db.py</code> does only that and prints row counts, as a connection check. <code>python -m pytest -q</code> runs the tests against a separate <code>columbus_housing_test</code> database.</p>
+  </section>
+
+  <section class="col">
+    <h2>Components</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>File</th><th>Job</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">run.py</td><td>Command line: <code>auditor</code>, <code>reparse</code>, <code>county-file</code>, <code>redfin</code>, <code>zillow</code>, <code>report</code>, <code>all</code>. Prints the report.</td></tr>
+          <tr><td class="mono">pipeline/auditor.py</td><td>Finds Franklin weekly sales report pages, saves each page to <code>raw_page</code> before parsing, parses the sales tables, records the county's own count for validation.</td></tr>
+          <tr><td class="mono">pipeline/county_file.py</td><td>Reads a Delaware or Licking export (CSV, TSV, .xls, .xlsx). Matches columns by header name, keeps residential rows, pulls ZIP from the address if needed.</td></tr>
+          <tr><td class="mono">pipeline/redfin.py</td><td>Reads a downloaded Redfin weekly file in 200k-row chunks and keeps the Columbus metro row plus the three county rows.</td></tr>
+          <tr><td class="mono">pipeline/zillow.py</td><td>Downloads Zillow's county and ZIP ZHVI CSVs (or reads <code>--file</code>), keeps the three counties and their ZIPs, replaces that kind's rows.</td></tr>
+          <tr><td class="mono">pipeline/http.py</td><td>All web requests: honors robots.txt, waits 2 seconds between calls, retries with backoff.</td></tr>
+          <tr><td class="mono">pipeline/db.py</td><td>SQL Server connection (Windows auth), schema setup, and the write helpers.</td></tr>
+          <tr><td class="mono">sql/schema.sql</td><td>Tables. Created only if missing.</td></tr>
+          <tr><td class="mono">sql/views.sql</td><td>Views. Rebuilt on every connect.</td></tr>
+          <tr><td class="mono">tests/</td><td>Parser tests on hand-made fixtures, plus database tests on a throwaway database.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="col">
+    <h2>What makes it safe to rerun</h2>
+    <ul class="gaps">
+      <li><span class="pill low">Sales</span><span>A sale is keyed on county, parcel, date and price. Loading the same report or file twice adds nothing.</span></li>
+      <li><span class="pill low">Reports</span><span>Franklin pages already loaded and saved are skipped unless you pass <code>--refetch</code>. Raw pages are stored once per distinct content.</span></li>
+      <li><span class="pill low">Failures</span><span>Each load commits once at the end. A crash midway leaves the database as it was, except the raw page, which is saved first on purpose.</span></li>
+      <li><span class="pill low">Redfin</span><span>The table is replaced on every load, since Redfin revises past weeks.</span></li>
+      <li><span class="pill low">Zillow</span><span>Each kind (county, ZIP) is replaced wholesale, and skipped when the file's Last-Modified hasn't changed.</span></li>
+    </ul>
+  </section>
+
+  <section class="col">
+    <h2>Known gaps</h2>
+    <ul class="gaps">
+      <li><span class="pill high">Data loss</span><span>A missed weekly run loses that Franklin week for good once the county drops it (~30 weeks). Franklin YoY needs a full year of captured weeks.</span></li>
+      <li><span class="pill high">Alerts</span><span><code>run.py all</code> logs a Redfin failure but still exits successfully, and skips Redfin silently without <code>--file</code>, so a scheduled run can miss it quietly.</span></li>
+      <li><span class="pill med">Verify</span><span>Tests use hand-made fixtures, not real downloads. Check <code>v_report_validation</code> after the first Franklin backfill.</span></li>
+      <li><span class="pill med">Schema</span><span>Changes to an existing table are not applied. They need a migration script.</span></li>
+      <li><span class="pill med">Manual</span><span>Redfin's new Data Center has no stable file URL, so each week's file is a manual download.</span></li>
+      <li><span class="pill low">Mix shift</span><span>No square footage, beds or year built, so medians move with mix. Treat moves under ~3% as noise.</span></li>
+      <li><span class="pill low">Coverage</span><span>Delaware and Licking are only as current as your last file. Fairfield, Union, Madison and Pickaway are not included.</span></li>
+      <li><span class="pill low">Attribution</span><span>Zillow and Redfin must be credited wherever their data is shown.</span></li>
+    </ul>
+  </section>
+</div>
+</body>
+</html>
