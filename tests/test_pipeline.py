@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeline import auditor, backup, county_file, db, http, redfin, zillow
+from pipeline import auditor, backup, county_file, db, export, http, redfin, zillow
 
 FX = Path(__file__).parent / "fixtures"
 
@@ -292,6 +292,32 @@ def test_backup_prune_keeps_newest_of_that_database_only(tmp_path):
     assert (tmp_path / "columbus_housing_20261102_070000.bak").exists()
     assert note.exists()
     assert other.exists()
+
+
+def test_export_only_sends_new_rows(con, tmp_path):
+    con.execute("INSERT INTO auditor_report (report_url, report_type) VALUES ('r','residential')")
+    insert = ("INSERT INTO auditor_sale (parcel_id, sale_date, sale_price, report_type, report_url,"
+              " loaded_at) VALUES (?, '2026-10-26', ?, 'residential', 'r', ?)")
+    con.execute(insert, "A", 100000, "2026-11-01T08:00:00")
+    con.execute(insert, "B", 200000, "2026-11-02T08:00:00")
+    con.commit()
+
+    path, high, rows = export.export_new(con, "auditor_sale", None, tmp_path)
+    assert (rows, high, path.name) == (2, "2026-11-02T08:00:00", "auditor_sale_20261102_080000.csv")
+    header = path.read_text(encoding="utf-8").splitlines()[0].split(",")
+    assert "source_loaded_at" in header and "loaded_at" not in header  # bronze adds its own loaded_at
+
+    assert export.export_new(con, "auditor_sale", high, tmp_path) == (None, high, 0)  # nothing new
+
+    con.execute(insert, "C", 300000, "2026-11-03T08:00:00")
+    con.commit()
+    path, high, rows = export.export_new(con, "auditor_sale", high, tmp_path)
+    assert (rows, high) == (1, "2026-11-03T08:00:00")
+    assert ",C," not in path.read_text(encoding="utf-8").splitlines()[0]
+    assert "C" in path.read_text(encoding="utf-8").splitlines()[1].split(",")
+
+    with pytest.raises(KeyError):
+        export.export_new(con, "raw_page; DROP TABLE x", None, tmp_path)
 
 
 def test_load_url_saves_page_and_loads_once(con, monkeypatch):

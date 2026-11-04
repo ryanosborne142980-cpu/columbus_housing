@@ -29,6 +29,22 @@ def _auto_loader(folder: str):
 
 
 @dlt.table(
+    name="bronze_auditor_sale",
+    comment="County sales exported from SQL Server, raw. Rows arrive only as new files are landed.",
+)
+def bronze_auditor_sale():
+    return _auto_loader("auditor_sale")
+
+
+@dlt.table(
+    name="bronze_auditor_report",
+    comment="County report summaries, raw. A re-parsed report arrives again; silver picks the latest.",
+)
+def bronze_auditor_report():
+    return _auto_loader("auditor_report")
+
+
+@dlt.table(
     name="bronze_zillow_county",
     comment="Zillow Home Value Index by county, raw. Source: Zillow Group, zillow.com/research/data.",
 )
