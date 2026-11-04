@@ -89,7 +89,7 @@ def parse(path: Path) -> list[dict]:
         zips = addr.astype(str).str.extract(_ZIP_RE, expand=False)
 
     sales, skipped = [], 0
-    for parcel, d, p, a, z in zip(df[cm["parcel_id"]], dates, prices, addr, zips):
+    for parcel, d, p, a, z in zip(df[cm["parcel_id"]], dates, prices, addr, zips, strict=True):
         if pd.isna(d) or pd.isna(p) or not str(parcel).strip():
             skipped += 1
             continue

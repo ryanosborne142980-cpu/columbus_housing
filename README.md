@@ -10,20 +10,35 @@ Weekly Columbus-area housing trends from free, legitimate sources, landed in SQL
 | Zillow Home Value Index (ZHVI) | Franklin/Delaware/Licking county rows + their ZIPs, monthly, back to 2000 | Monthly (16th) | Long history for YoY and a seasonal baseline; smoothed, seasonally adjusted. **Attribution to Zillow required.** |
 
 ## Setup
-Needs SQL Server (default: local instance `.\ROSBO_SQL`, Windows auth) and ODBC Driver 18 for SQL Server.
+Needs SQL Server (default: `localhost`, Windows auth; for a named instance set `COLUMBUS_HOUSING_SERVER`,
+e.g. `.\SQLEXPRESS`) and ODBC Driver 18 for SQL Server.
 ```bash
 # Install the dependencies required to fetch, parse, and load the housing data.
 pip install -r requirements.txt
-# Run the automated checks (uses a throwaway database, columbus_housing_test, on the same instance).
-python -m pytest -q
 ```
 Data lands in database `columbus_housing` (created on first run). Override with `--server` / `--db`,
 or env vars `COLUMBUS_HOUSING_SERVER` / `COLUMBUS_HOUSING_DB`. Schema changes to existing tables are not
 applied automatically: `sql/schema.sql` only creates missing tables, while views are recreated on every run.
 
+To use a SQL login instead of Windows auth, set `COLUMBUS_HOUSING_UID` and `COLUMBUS_HOUSING_PWD`.
+
+## Development
+```bash
+pip install -r requirements-dev.txt   # adds pytest + ruff
+ruff check .                          # lint (config in pyproject.toml)
+python -m pytest -q                   # uses a throwaway database, columbus_housing_test
+```
+CI (`.github/workflows/ci.yml`) runs both on every pull request and push to `main`: ruff, then the full
+test suite against a SQL Server 2022 container. Work goes through branches and pull requests; merge only
+when CI is green.
+
+- [CONTRIBUTING.md](CONTRIBUTING.md): workflow, review checklist, adding a data source
+- [docs/runbook.md](docs/runbook.md): running the pipeline, checking results, recovering from failures
+- [docs/decisions/](docs/decisions/README.md): why the pipeline works the way it does
+
 ## Run
 ```bash
-# Load every Franklin County report still online (the county keeps ~30 weeks).
+# Load the Franklin County reports still online (the county appears to keep ~30 weeks).
 python run.py auditor --since 2024-10-01      # backfill; stops when weeks run out; incremental after
 # Re-parse saved raw pages after a parser fix (no network).
 python run.py reparse
@@ -58,10 +73,10 @@ Re-runs are idempotent: loaded reports are skipped, and sales are keyed on count
 
 ## Known limits
 - **Zillow data terms:** free for public use with clear attribution to Zillow. `report` prints the source line and `--export` writes `ATTRIBUTION.txt`; keep that line on anything you publish. Zillow's Terms of Use bar scraping, so the loader only downloads the published CSVs, at most once per update. Run it monthly by hand rather than in the weekly job.
-- **Franklin reports stay online only ~30 weeks.** Every fetched page is saved verbatim in `raw_page`, so old weeks can be re-parsed after they disappear. Run the weekly job without gaps: a missed week is lost for good, and Franklin YoY needs a full year of captured weeks.
+- **Franklin reports appear to stay online only ~30 weeks.** Every report page fetched is saved in `raw_page`, so old weeks can be re-parsed after they disappear. Run the weekly job without gaps: a missed week is lost for good, and Franklin YoY needs a full year of captured weeks.
 - **Delaware and Licking are manual and only as fresh as your last file.** Their YoY needs two years of history in the export. Fairfield, Union, Madison and Pickaway are still missing.
 - **No property attributes** (sqft, beds, year built), so medians move with mix shift. Treat moves under ~3% as noise until you enrich via parcel lookup.
 - **The $10k floor is a proxy** for arm's-length sales. It doesn't catch below-market related-party sales or bulk/portfolio deals.
 - **Daily Conveyance is robots-disallowed** and deliberately unused. The code honors robots.txt everywhere.
-- **Redfin is a manual download.** The legacy S3 weekly file stopped updating in March 2025 and the old market-tracker paths return 403; the new Data Center's links are JS-rendered. Download the weekly file from https://www.redfin.com/news/data-center/ and load it with `--file` (CSV/TSV/gz auto-detected, read in chunks so all-US files are fine). `all` skips Redfin unless you pass `--file`. Credit Redfin wherever its data is shown.
+- **Redfin is a manual download.** The legacy S3 weekly file stopped updating in March 2025, the market-tracker paths tried on that bucket return 403, and the new Data Center's links appear to be JS-rendered. Download the weekly file from https://www.redfin.com/news/data-center/ and load it with `--file` (CSV/TSV/gz auto-detected, read in chunks for large files; not yet tried on a real all-US file). `all` skips Redfin unless you pass `--file`. Credit Redfin wherever its data is shown.
 - **Parser** was built against the live page structure as of 2026-11-01. Check `v_report_validation` after your first run.

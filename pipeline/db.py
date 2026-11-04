@@ -19,7 +19,7 @@ import pyodbc
 # Project root (two levels up from this file: pipeline/db.py -> repo root).
 ROOT = Path(__file__).resolve().parent.parent
 # Connection defaults; override with env vars or run.py --db / --server.
-DEFAULT_SERVER = os.environ.get("COLUMBUS_HOUSING_SERVER", r".\ROSBO_SQL")
+DEFAULT_SERVER = os.environ.get("COLUMBUS_HOUSING_SERVER", "localhost")
 DEFAULT_DB = os.environ.get("COLUMBUS_HOUSING_DB", "columbus_housing")
 DRIVER = "ODBC Driver 18 for SQL Server"
 # sql/*.sql files are split into batches on lines containing only GO (CREATE VIEW must start a batch).
@@ -30,9 +30,13 @@ SALE_COLS = ("county", "parcel_id", "sale_date", "sale_price", "site_address", "
 
 
 def _conn_str(server: str, database: str) -> str:
-    # Windows auth (no stored password). Local instance uses a self-signed cert, hence TrustServerCertificate.
-    return (f"DRIVER={{{DRIVER}}};SERVER={server};DATABASE={database};"
-            "Trusted_Connection=yes;TrustServerCertificate=yes")
+    # Windows auth by default (no stored password). If COLUMBUS_HOUSING_UID is set, use a SQL login
+    # instead (CI runs SQL Server in a Linux container, which has no Windows auth); the password
+    # comes from COLUMBUS_HOUSING_PWD, never from code. Self-signed certs, hence TrustServerCertificate.
+    uid = os.environ.get("COLUMBUS_HOUSING_UID")
+    auth = (f"UID={uid};PWD={os.environ.get('COLUMBUS_HOUSING_PWD', '')}" if uid
+            else "Trusted_Connection=yes")
+    return f"DRIVER={{{DRIVER}}};SERVER={server};DATABASE={database};{auth};TrustServerCertificate=yes"
 
 
 def connect(database: str = DEFAULT_DB, server: str = DEFAULT_SERVER) -> pyodbc.Connection:
