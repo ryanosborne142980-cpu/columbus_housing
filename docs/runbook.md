@@ -42,36 +42,34 @@ auditor: {'reports': 1, 'new_rows': 340, 'skipped': 8}
 Pages that return an error status are logged as `WARNING HTTP ...` but aren't counted in these numbers, so
 read the warnings too.
 
-Then run these checks. The first three should return no rows:
+Then run the data checks. The weekly job does this after loading:
 
-```sql
--- Parsed count differs from the county's own count.
-SELECT report_url, reported_count, parsed_rows, diff FROM v_report_validation WHERE diff <> 0;
-
--- Report has no week or no sales.
-SELECT report_url FROM auditor_report WHERE period_start IS NULL OR parsed_rows = 0;
-
--- Sale has no ZIP.
-SELECT TOP 20 parcel_id, sale_date, report_url FROM auditor_sale WHERE zip IS NULL;
-
--- Newest week loaded. Should end within about 11 days of today.
-SELECT MAX(period_end) FROM auditor_report;
+```bash
+python run.py check
 ```
 
-`v_report_validation` leaves out reports with no county summary, so it can't vouch for them:
+The rules are in [pipeline/quality.py](../pipeline/quality.py). `FAIL` means the data is wrong or incomplete: the
+command exits 1, and the weekly job skips its Databricks steps but still backs up. Fix the data or the parser, then
+re-run `scripts/weekly.py`. `WARN` is for review and blocks nothing.
 
-```sql
-SELECT report_url, period_start, parsed_rows FROM auditor_report WHERE reported_count IS NULL;
-```
+If a failure turns out to be correct as published, add it to `KNOWN` in `quality.py` with what you found.
 
-Expected exceptions:
+Expected as of 2026-11-06:
 
-- **Week of Sep 4, 2026 (`diff` of -1):** the page lists 336 parcels, but its summary says 337. The county's
-  number is wrong.
-- **Nine April/May 2026 reports with no summary (5 residential, 4 commercial):** the pages don't include one.
-  Their parsed counts were checked against the parcel numbers on each page instead.
-- **Some report weeks look odd, such as Jun 20 – 26, 2026:** the county's page gives two different ranges. The
-  summary views use each sale's own date, not the report's week.
+- **Week of Sep 4, 2026:** the page lists 336 parcels, but its summary says 337. In `KNOWN`.
+- **ZIP 46026 (parcel 053-001136-00):** the county's page files the sale under that ZIP. Most sales in that parcel range
+  are in 43026, so it's probably a typo, but the data is left as published. In `KNOWN`.
+- **$13.1M at 5681 Rager Rd:** warns as a high residential price. The county's page shows that price, but whether it's
+  a house hasn't been checked.
+- **Three reports with a 6-day week, and two commercial reports giving Jun 5 - 11:** warn. `20260621-WCSR` also accounts
+  for 18 of the sales outside their report's week. The summary views use each sale's own date, not the report's week.
+- **Nine sales dated Jun 12 in `20260614-WHSR`:** warn as outside that report's Jun 5 - 11 week.
+- **Nine April/May 2026 reports with no summary (5 residential, 4 commercial):** the pages don't include one. The
+  `parsed_matches_page` rule compares them with the parcel IDs in the saved page instead.
+
+Reports were published exactly 7 days apart across all 59, so these date oddities don't mean a week is missing.
+
+After landing, `python databricks/reconcile.py` checks that silver matches SQL Server. It also runs in the weekly job.
 
 ## When something fails
 

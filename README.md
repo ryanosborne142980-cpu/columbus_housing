@@ -9,6 +9,20 @@ Weekly Columbus-area housing trends from free, legitimate sources, landed in SQL
 | Redfin Data Center weekly tracker | Columbus metro + Franklin/Delaware/Licking county rows, rolling 4-week | Thursdays | Leading indicators: new listings, pendings, inventory, DOM, price drops |
 | Zillow Home Value Index (ZHVI) | Franklin/Delaware/Licking county rows + their ZIPs, monthly, back to 2000 | Monthly (16th) | Long history for YoY and a seasonal baseline; smoothed, seasonally adjusted. **Attribution to Zillow required.** |
 
+## What's loaded so far
+
+Checked 2026-11-05. The other sources above have loaders and sample-file tests, but no real data yet.
+
+| Source | Status |
+|---|---|
+| Franklin County | 12,718 sales (12,065 residential, 653 commercial) from 59 reports, sold 2026-04-03 to 2026-10-29 |
+| Zillow | 20,071 monthly rows: 3 counties and 61 ZIPs, 2000-01 to 2026-09 |
+| Redfin | Not loaded |
+| Delaware, Licking | Not loaded |
+
+50 of the 59 reports publish a sale count. 49 match the parsed rows. In the other, the page lists 336 parcels and
+its summary says 337.
+
 ## Setup
 Needs SQL Server (default: `localhost`, Windows auth; for a named instance set `COLUMBUS_HOUSING_SERVER`,
 e.g. `.\SQLEXPRESS`) and ODBC Driver 18 for SQL Server.
@@ -51,6 +65,8 @@ python run.py redfin --file <download>         # from https://www.redfin.com/new
 python run.py zillow                           # or --kind zip --file <CSV from zillow.com/research/data>
 # Generate the reports and export every view to CSV files in the target folder.
 python run.py report --export out/             # summary + CSVs of every view
+# Check the loaded data against the quality rules in pipeline/quality.py. Exits 1 if a rule fails.
+python run.py check
 # Run the regular weekly job for Franklin County and Redfin data only.
 python run.py all --since 2026-10-01           # weekly job (Franklin + Redfin; not county files)
 ```

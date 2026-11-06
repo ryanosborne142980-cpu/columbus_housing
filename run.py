@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from pipeline import auditor, backup, county_file, db, redfin, zillow
+from pipeline import auditor, backup, county_file, db, quality, redfin, zillow
 
 
 def report(con, export: str | None) -> None:
@@ -86,7 +86,7 @@ def report(con, export: str | None) -> None:
 def main(argv=None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("cmd", choices=["auditor", "reparse", "county-file", "redfin", "zillow", "report",
-                                   "backup", "all"])
+                                   "backup", "check", "all"])
     p.add_argument("--county", choices=county_file.COUNTIES, help="county for county-file")
     p.add_argument("--db", default=db.DEFAULT_DB, help="SQL Server database name")
     p.add_argument("--server", default=db.DEFAULT_SERVER, help="SQL Server instance")
@@ -113,6 +113,10 @@ def main(argv=None) -> int:
             problems = auditor.run_problems(con, stats)
     if a.cmd == "backup":
         print("backup:", backup.run(con))
+    if a.cmd == "check":
+        findings = quality.check(con)
+        quality.print_report(findings)
+        problems = [f"{f.rule.name}: {len(f.rows)}" for f in quality.failures(findings)]
     if a.cmd == "reparse":
         print("reparse:", auditor.reparse(con))
     if a.cmd == "county-file":

@@ -16,6 +16,7 @@ deployed from this folder.
 | Silver tables and data quality rules | [pipelines/silver.py](pipelines/silver.py) |
 | Zillow file to volume | [land_zillow.py](land_zillow.py) |
 | New SQL Server rows to volume | [land_sql_tables.py](land_sql_tables.py) |
+| Silver compared with SQL Server | [reconcile.py](reconcile.py) |
 
 ## How it works
 
@@ -37,7 +38,11 @@ databricks bundle deploy -p columbus     # from this folder
 python databricks/land_zillow.py         # from the repo root
 python databricks/land_sql_tables.py     # from the repo root
 databricks bundle run bronze -p columbus # from this folder
+python databricks/reconcile.py           # from the repo root; exits 1 if silver differs from SQL Server
 ```
+
+`reconcile.py` was run against the real tables on 2026-11-06 and matched: 12,038 clean sales and 59 reports, on row
+counts, totals and date ranges. A real difference hasn't happened yet; only a unit test has covered that path.
 
 ## What's been tested
 
