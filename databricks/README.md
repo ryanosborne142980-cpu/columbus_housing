@@ -28,6 +28,11 @@ deployed from this folder.
 4. Bronze keeps every value as a string. Each row records `source_file`, `source_modified_at` and `loaded_at`.
 5. Silver sets types, picks the latest version of each row, and applies data quality rules. A row with no sale date,
    sale price or Zillow value is dropped; a missing ZIP or report week is only counted.
+6. The sale date and price rules run on `sale_typed`, a view inside the pipeline, before `silver_sale` applies its
+   $10k floor. A price that didn't parse is null, so the floor would remove it first and the rule would count
+   nothing.
+7. The pipeline publishes its event log as `pipeline_event_log` in the same schema. Each rule's passed and failed
+   row counts are in its `flow_progress` events.
 
 ## Run it
 
