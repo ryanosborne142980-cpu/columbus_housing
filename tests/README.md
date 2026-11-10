@@ -104,11 +104,45 @@ code handles the format we expect; they do not prove the live sources still look
 - **test_zillow_skips_download_when_file_unchanged**: With a fake network, a second load sees the same
   Last-Modified date and skips the download.
 
+### Run health
+
+- **test_run_problems_flags_runs_that_look_finished_but_failed**: A run counts as failed if pages couldn't be fetched,
+  discovery found nothing, or the newest week is over 14 days old. A week with nothing new to load doesn't.
+
+### Data quality
+
+- **test_quality_passes_clean_data**: A good report and Zillow's counties trip no failing rule.
+- **test_quality_failing_rule_catches_bad_data**: Breaks the data 13 ways, one at a time, and checks the matching failing
+  rule fires, so a rule that can never fire doesn't pass unnoticed.
+- **test_quality_warning_rule_fires_when_broken**, **test_quality_cadence_and_duplicate_weeks**,
+  **test_quality_volume_dip_compares_newest_week_with_recent_ones**, **test_quality_zillow_jump_warns**: Do the same for
+  warnings. **test_quality_warning_alone_does_not_fail** checks a warning doesn't fail the check.
+- **test_quality_known_exception_is_left_out**: A checked exception stops being reported.
+- **test_quality_redfin_only_checked_once_loaded**, **test_quality_redfin_date_column_that_isnt_a_date**: Redfin rules
+  skip a database with no Redfin table, then catch an unexpected region and a column holding 1970 dates.
+- **test_zillow_refuses_a_file_much_smaller_than_what_is_loaded**: A cut-off file raises an error and the loaded rows
+  stay.
+- **test_county_file_fails_when_land_use_filter_keeps_nothing**: A wrong land use column raises an error instead of
+  quietly loading nothing.
+- **test_weekly_skips_databricks_only_when_the_data_check_fails**: With fake commands, a failed check skips the Databricks
+  steps but not the backup.
+- **test_run_check_exits_nonzero_on_a_failed_rule_but_not_a_warning**: `run.py check` exits 0 on clean data and on a
+  warning, and 1 on a failure.
+- **test_reconcile_reports_only_real_differences**: Numbers and dates that match as text aren't reported, and a different
+  count is.
+
 ### Exports
 
 - **test_export_only_sends_new_rows**: Exports two sales, finds nothing new on a second run, then exports only a third
   added later. Checks that `loaded_at` is renamed so it can't collide with bronze's column, and that an unknown table
   name is refused.
+
+### Pipeline runs
+
+- **test_run_pipeline_reports_how_a_restart_ended**: With a fake CLI, `run_pipeline.py` waits through a schema-change
+  restart and reports whether the restart completed or failed.
+- **test_run_pipeline_ignores_a_finished_update_from_before_this_run**: A run that fails to start can't report success
+  by reading an older update.
 
 ### Backups
 
