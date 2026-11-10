@@ -388,8 +388,9 @@ def test_run_pipeline_ignores_a_finished_update_from_before_this_run(monkeypatch
 def test_run_problems_flags_runs_that_look_finished_but_failed(con):
     today = date(2026, 11, 9)
     healthy = {"reports": 1, "new_rows": 300, "skipped": 8}
-    assert "older" not in " ".join(auditor.run_problems(con, healthy, today))
-    assert auditor.run_problems(con, healthy, today)  # empty table: nothing is fresh
+    # Empty table: nothing is fresh, and that is the only problem with an otherwise healthy run.
+    assert auditor.run_problems(con, healthy, today) == [
+        "newest Franklin week ended None, more than 14 days ago"]
 
     con.execute("INSERT INTO auditor_report (report_url, report_type, period_end) "
                 "VALUES ('r', 'residential', '2026-11-05')")
