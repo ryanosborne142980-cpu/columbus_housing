@@ -65,7 +65,7 @@ Two things the diagram makes plain:
 |---|---|---|---|
 | Franklin report page | `raw_page` | [`auditor.py`](../../pipeline/auditor.py), through [`http.py`](../../pipeline/http.py) | Nothing. The page is saved whole, once per distinct content |
 | `raw_page` | `auditor_report`, `auditor_sale` | `auditor.py` | HTML tables become rows. The ZIP comes from the table's heading or caption. A sale already loaded is skipped |
-| County export file | `auditor_report`, `auditor_sale` | [`county_file.py`](../../pipeline/county_file.py) | Columns are found by header name. Owner and mailing columns are ignored. Residential rows only |
+| County export file | `auditor_report`, `auditor_sale` | [`county_file.py`](../../pipeline/county_file.py) | Columns are found by header name. Owner and mailing columns are ignored. When the file has a land use column, only residential rows are kept. When it has none, every row with a parcel, date and price loads, and all are labeled residential |
 | Zillow CSV | `zillow_zhvi` | [`zillow.py`](../../pipeline/zillow.py) | Three Ohio counties and their ZIPs are kept. One column per month becomes one row per month. Replaced on each load |
 | `auditor_sale`, `auditor_report` | `raw` volume | [`export.py`](../../pipeline/export.py), [`land_sql_tables.py`](../../databricks/land_sql_tables.py) | Rows newer than the last high point go out as CSV. `loaded_at` is renamed `source_loaded_at` |
 | Zillow county CSV | `raw` volume | [`land_zillow.py`](../../databricks/land_zillow.py) | Nothing. The file name gains Zillow's Last-Modified date |

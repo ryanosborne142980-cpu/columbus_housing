@@ -69,7 +69,7 @@ These protect the same dimensions but run at a different point, so they aren't i
 | Reconciliation | Consistency | [`reconcile.py`](../../databricks/reconcile.py) | Silver must match SQL Server on row counts, totals and date ranges for sales and reports |
 | Cut-off file guard | Completeness | [`zillow.py`](../../pipeline/zillow.py) | A Zillow file with under 95% of the rows already loaded is refused |
 | Stale run | Timeliness | `run_problems` in [`auditor.py`](../../pipeline/auditor.py) | A run counts as failed if the newest week is over 14 days old |
-| Land use filter | Validity | [`county_file.py`](../../pipeline/county_file.py) | A county file whose land use filter keeps nothing raises an error |
+| Land use filter | Validity | [`county_file.py`](../../pipeline/county_file.py) | A county file whose land use filter keeps nothing raises an error. A file with no land use column isn't filtered at all |
 
 ## Gaps
 
@@ -77,4 +77,6 @@ These protect the same dimensions but run at a different point, so they aren't i
   from what had loaded by then.
 - **No alert.** A failed weekly job writes a log and a non-zero exit code. Nothing sends a message.
 - **Zillow isn't reconciled** between SQL Server and Databricks.
+- **A county file with no land use column loads unfiltered.** Every row is labeled residential, and only a log line
+  shows that no filter ran. No rule catches a commercial sale that arrives this way.
 - **Expectation counts aren't tracked over time.** Each pipeline update records them; nothing reads them back.

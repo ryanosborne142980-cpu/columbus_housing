@@ -42,5 +42,5 @@ A checked exception to a rule is a steward decision. Each one is written next to
 - **The lineage diagram.**
 - **`redfin_columbus_weekly` has no dictionary rows.** The loader rebuilds it on every load and Redfin's columns
   vary, so `redfin_load_log.columns` records what each file held. No real Redfin file has been loaded yet.
-- **Nothing is applied in Databricks.** Table comments are set in the pipeline code. Column comments, tags and
-  access rules in Unity Catalog are not.
+- **Classifications aren't applied in Databricks.** The pipeline code sets table comments, and those do reach
+  Unity Catalog. Column comments, classification tags and access rules don't.
