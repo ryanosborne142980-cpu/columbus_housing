@@ -1,6 +1,94 @@
 # Columbus Housing Trend Pipeline
 
-Weekly Columbus-area housing trends from free, legitimate sources, landed in SQL Server.
+[![CI](https://github.com/ryanosborne142980-cpu/columbus_housing/actions/workflows/ci.yml/badge.svg)](https://github.com/ryanosborne142980-cpu/columbus_housing/actions/workflows/ci.yml)
+
+Turns Franklin County's weekly home-sale report pages into parcel-level sales data that is checked against the
+county's own counts, then carried through bronze and silver tables on Databricks.
+
+The county posts each week's closed sales as a web page and appears to take it down about 30 weeks later. This
+pipeline saves every page, parses it, compares the parsed rows with the count the county printed, and stops bad
+data before it goes any further. Python and SQL Server do the loading, Databricks holds the lakehouse copy, and
+GitHub Actions tests every change against a real SQL Server.
+
+## At a glance
+
+| | |
+|---|---|
+| **Loaded** | 12,718 sales from 59 weekly reports (April to October 2026), plus 20,071 monthly Zillow rows |
+| **Parser check** | 49 of the 50 reports that publish a count match it exactly. The other is the county's miscount: the page lists 336 parcels and its summary says 337. |
+| **Quality gate** | 23 rules in [`pipeline/quality.py`](pipeline/quality.py). A failed rule stops the weekly job before anything lands in Databricks. |
+| **Reconciliation** | Databricks silver matches SQL Server on 12,038 clean sales: row count, price total and date range, with matching medians for all 31 weeks |
+| **Tests** | 55 tests. CI runs them against a SQL Server 2022 container on every pull request. |
+| **Decisions** | 8 short [decision records](docs/decisions/README.md) covering what was chosen and what it costs |
+
+Figures were checked on 2026-11-05 and 2026-11-06. Databricks runs on Free Edition, which shows the tools working
+end to end, not production scale.
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph SRC["Sources"]
+        F["Franklin County Auditor<br/>weekly report pages"]
+        Z["Zillow ZHVI<br/>monthly CSVs"]
+        C["Delaware and Licking<br/>county export files"]
+        R["Redfin weekly tracker<br/>manual download"]
+    end
+
+    subgraph PY["Python loaders"]
+        H["http.py<br/>robots.txt, rate limit, backoff"]
+        L["auditor, zillow,<br/>county_file, redfin"]
+    end
+
+    subgraph SQL["SQL Server"]
+        RAW[("raw_page<br/>every fetched page")]
+        T[("auditor_sale, auditor_report,<br/>zillow_zhvi, redfin_columbus_weekly")]
+        V["Views: clean sales, weekly and<br/>rolling 4-week medians, ZIP by month"]
+    end
+
+    Q{"run.py check<br/>23 quality rules"}
+
+    subgraph DBX["Databricks"]
+        VOL[("raw volume<br/>files as received")]
+        B["Bronze<br/>Auto Loader, append-only"]
+        S["Silver<br/>typed, latest version"]
+    end
+
+    F --> H
+    Z --> H
+    H --> L
+    C --> L
+    R --> L
+    L --> RAW
+    L --> T
+    RAW -. "reparse after a parser fix" .-> L
+    T --> V
+    T --> Q
+    Q -- "pass: land new rows" --> VOL
+    VOL --> B
+    B --> S
+    S -. "reconcile.py compares" .-> V
+```
+
+One command runs the weekly job, [`scripts/weekly.py`](scripts/weekly.py): load Franklin, check the data, back up
+the database, land new rows in Databricks, run bronze and silver, and reconcile. It exits non-zero if any step
+fails. Zillow's county file reaches the same volume monthly through
+[`land_zillow.py`](databricks/land_zillow.py).
+
+## What to look at
+
+| If you care about | Look at | Why it's there |
+|---|---|---|
+| Safe re-runs | [`db.insert_new_sales`](pipeline/db.py), [`export.py`](pipeline/export.py) | Sales are keyed on county, parcel, date and price, and exports move a high-water mark only after an upload succeeds. Running anything twice adds nothing. |
+| Data you can't get back | [`raw_page`](sql/schema.sql), [decision 0001](docs/decisions/0001-keep-raw-pages.md) | Report pages drop off the county site, so each one is saved before it's parsed. A parser fix is replayed over saved pages with `run.py reparse`, with no network. |
+| Failing loudly | [`quality.py`](pipeline/quality.py), [`weekly.py`](scripts/weekly.py) | Rules are split into fail and warn, with checked exceptions written down next to them. Bronze is append-only, so a failed check skips the Databricks steps entirely. |
+| Proving two systems agree | [`reconcile.py`](databricks/reconcile.py), [`drift_test.py`](databricks/drift_test.py) | Silver is compared with SQL Server after every run. Schema drift, repeated row versions and bad rows are exercised in a separate bundle target so sample rows can't reach real tables. |
+| Lakehouse layers as code | [`bronze.py`](databricks/pipelines/bronze.py), [`silver.py`](databricks/pipelines/silver.py), [`databricks.yml`](databricks/databricks.yml) | Auto Loader into append-only bronze, typed and de-duplicated silver with expectations, all deployed as an asset bundle. |
+| Being a good guest | [`http.py`](pipeline/http.py), [decision 0003](docs/decisions/0003-respect-source-access-rules.md) | Every request honors robots.txt and Crawl-delay, is rate limited per host and backs off on 429 and 503. A source that says no is not worked around. |
+| Testing SQL as SQL | [`ci.yml`](.github/workflows/ci.yml), [decision 0007](docs/decisions/0007-ci-and-branch-protection.md) | Medians, rolling windows and duplicate-safe inserts live in SQL, so tests run against real SQL Server, not a stand-in. `main` takes pull requests only. |
+| How it's operated | [runbook](docs/runbook.md), [CONTRIBUTING.md](CONTRIBUTING.md) | What a healthy run looks like, what each failure means, and how to restore from backup, which has been tested. |
+
+## Sources
 
 | Source | Grain | Cadence | Gives you |
 |---|---|---|---|
@@ -49,7 +137,7 @@ when CI is green.
 - [CONTRIBUTING.md](CONTRIBUTING.md): workflow, review checklist, adding a data source
 - [docs/runbook.md](docs/runbook.md): running the pipeline, checking results, recovering from failures
 - [docs/decisions/](docs/decisions/README.md): why the pipeline works the way it does
-- [databricks/](databricks/README.md): bronze layer with Auto Loader, deployed as an asset bundle
+- [databricks/](databricks/README.md): bronze and silver layers with Auto Loader, deployed as an asset bundle
 
 ## Run
 ```bash
@@ -70,7 +158,7 @@ python run.py check
 # Run the regular weekly job for Franklin County and Redfin data only.
 python run.py all --since 2026-10-01           # weekly job (Franklin + Redfin; not county files)
 ```
-Schedule `python run.py all` weekly (Mon morning; both sources have published by then).
+The scheduled weekly job is `python scripts/weekly.py` (Mondays; see the [runbook](docs/runbook.md)).
 Re-runs are idempotent: loaded reports are skipped, and sales are keyed on county+parcel+date+price.
 
 ## Getting the Delaware and Licking files
