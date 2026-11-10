@@ -1,9 +1,11 @@
+import importlib.util
 from datetime import date, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from pipeline import auditor, backup, county_file, db, export, http, redfin, zillow
+from pipeline import auditor, backup, county_file, db, export, http, quality, redfin, zillow
 
 FX = Path(__file__).parent / "fixtures"
 
@@ -336,3 +338,231 @@ def test_load_url_saves_page_and_loads_once(con, monkeypatch):
     assert con.execute("SELECT COUNT(*) FROM raw_page WHERE url = ?", url).fetchone()[0] == 1
     with pytest.raises(ValueError, match="Not a Franklin"):
         auditor.load_url(con, "https://example.com/News-articles/20260510-WHSR")
+
+
+def _run_pipeline_module():
+    spec = importlib.util.spec_from_file_location(
+        "run_pipeline", Path(__file__).parent.parent / "databricks" / "run_pipeline.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("final, expected", [("COMPLETED", 0), ("FAILED", 1)])
+def test_run_pipeline_reports_how_a_restart_ended(monkeypatch, final, expected):
+    rp = _run_pipeline_module()
+    old = {"update_id": "old", "state": "COMPLETED", "cause": "API_CALL"}
+    stopped = {"update_id": "a", "state": "CANCELED", "cause": "API_CALL"}
+    restart = {"update_id": "b", "state": "RUNNING", "cause": "SCHEMA_CHANGE"}
+    done = {"update_id": "b", "state": final, "cause": "SCHEMA_CHANGE"}
+    # Newest first. The stopped update is settled for two polls before the restart shows up.
+    seen = iter([[old], [stopped, old], [stopped, old], [restart, stopped, old],
+                 [done, stopped, old], [done, stopped, old], [done, stopped, old]])
+
+    class Done:
+        returncode = 1
+
+    monkeypatch.setattr(rp.shutil, "which", lambda name: "databricks")
+    monkeypatch.setattr(rp, "_json", lambda *a: [{"name": rp.NAMES["dev"], "pipeline_id": "p"}])
+    monkeypatch.setattr(rp, "_updates", lambda pipeline_id: next(seen))
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: Done())
+    monkeypatch.setattr(rp.time, "sleep", lambda seconds: None)
+    assert rp.run("dev") == expected
+
+
+def test_run_pipeline_ignores_a_finished_update_from_before_this_run(monkeypatch):
+    rp = _run_pipeline_module()
+    old = {"update_id": "old", "state": "COMPLETED", "cause": "API_CALL"}
+
+    class Done:
+        returncode = 1
+
+    monkeypatch.setattr(rp.shutil, "which", lambda name: "databricks")
+    monkeypatch.setattr(rp, "_json", lambda *a: [{"name": rp.NAMES["dev"], "pipeline_id": "p"}])
+    monkeypatch.setattr(rp, "_updates", lambda pipeline_id: [old])
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: Done())
+    monkeypatch.setattr(rp.time, "sleep", lambda seconds: None)
+    assert rp.run("dev") == 1  # a failed start must not borrow an earlier update's success
+
+
+def test_run_problems_flags_runs_that_look_finished_but_failed(con):
+    today = date(2026, 11, 9)
+    healthy = {"reports": 1, "new_rows": 300, "skipped": 8}
+    # Empty table: nothing is fresh, and that is the only problem with an otherwise healthy run.
+    assert auditor.run_problems(con, healthy, today) == [
+        "newest Franklin week ended None, more than 14 days ago"]
+
+    con.execute("INSERT INTO auditor_report (report_url, report_type, period_end) "
+                "VALUES ('r', 'residential', '2026-11-05')")
+    assert auditor.run_problems(con, healthy, today) == []
+    assert auditor.run_problems(con, {"reports": 0, "new_rows": 0, "skipped": 9}, today) == []  # nothing new
+    assert "discovery found no reports" in auditor.run_problems(
+        con, {"reports": 0, "new_rows": 0, "skipped": 0}, today)
+    assert any("couldn't be fetched" in x for x in auditor.run_problems(con, {**healthy, "failed": 2}, today))
+    assert any("days ago" in x for x in auditor.run_problems(con, healthy, date(2026, 12, 1)))
+
+
+# ---------- data quality ----------
+
+WHSR_URL = "https://auditor.franklincountyohio.gov/News-articles/20261101-WHSR"
+
+
+@pytest.fixture
+def clean(con):
+    """One good report with its saved page, and Zillow's counties. Every failing rule should pass."""
+    html = (FX / "whsr.html").read_text()
+    db.save_raw(con, WHSR_URL, html, 200)
+    auditor.load(con, auditor.parse_report(html, WHSR_URL))
+    zillow.load(con, "county", file=str(FX / "zillow_county.csv"))
+    return con
+
+
+def fired(con, severity):
+    return {f.rule.name for f in quality.check(con) if f.rule.severity == severity}
+
+
+def test_quality_passes_clean_data(clean):
+    assert fired(clean, quality.FAIL) == set()
+
+
+@pytest.mark.parametrize("rule, sql", [
+    ("sale_type_matches_report", "UPDATE TOP (1) auditor_sale SET report_type = 'commercial'"),
+    ("sale_price_positive", "UPDATE TOP (1) auditor_sale SET sale_price = 0"),
+    ("sale_date_not_future", "UPDATE TOP (1) auditor_sale SET sale_date = DATEADD(year, 1, GETDATE())"),
+    ("sale_date_near_report_week", "UPDATE TOP (1) auditor_sale SET sale_date = '2020-01-01'"),
+    ("allowed_values", "UPDATE TOP (1) auditor_sale SET county = 'Fairfield'"),
+    ("franklin_parcel_format", "UPDATE TOP (1) auditor_sale SET parcel_id = 'BAD'"),
+    ("report_has_sales", "UPDATE auditor_report SET parsed_rows = 0"),
+    ("published_count_matches", "UPDATE auditor_report SET reported_count = 99"),
+    ("parsed_matches_page", "UPDATE raw_page SET content = 'no parcels here'"),
+    ("report_period_valid", "UPDATE auditor_report SET period_start = NULL"),
+    ("franklin_raw_page_saved", "DELETE FROM raw_page"),
+    ("zillow_counties_present", "DELETE FROM zillow_zhvi WHERE region_name = 'Licking County'"),
+    ("zillow_value_positive", "UPDATE TOP (1) zillow_zhvi SET zhvi = 0"),
+])
+def test_quality_failing_rule_catches_bad_data(clean, rule, sql):
+    clean.execute(sql)
+    assert rule in fired(clean, quality.FAIL)
+
+
+@pytest.mark.parametrize("rule, sql", [
+    ("franklin_zip_prefix", "UPDATE TOP (1) auditor_sale SET zip = '46026'"),
+    ("residential_price_cap", "UPDATE TOP (1) auditor_sale SET sale_price = 13100000"),
+    ("report_covers_7_days", "UPDATE auditor_report SET period_end = DATEADD(day, 1, period_end)"),
+    ("sale_in_report_week", "UPDATE auditor_report SET period_start = DATEADD(day, 1, period_end)"),
+])
+def test_quality_warning_rule_fires_when_broken(clean, rule, sql):
+    assert clean.execute(sql).rowcount > 0
+    assert rule in fired(clean, quality.WARN)
+
+
+def test_quality_warning_alone_does_not_fail(clean):
+    clean.execute("UPDATE TOP (1) auditor_sale SET zip = '46026'")
+    assert "franklin_zip_prefix" in fired(clean, quality.WARN)
+    assert fired(clean, quality.FAIL) == set()
+
+
+def _other_report(con, url, published, parsed=300, period_end=None):
+    period_end = period_end or published - timedelta(days=3)
+    db.upsert_report(con, {"report_url": url, "county": "Franklin", "report_type": "residential",
+                           "period_start": period_end - timedelta(days=6), "period_end": period_end,
+                           "published_on": published, "parsed_rows": parsed})
+
+
+def test_quality_cadence_and_duplicate_weeks(clean):
+    _other_report(clean, "u/older", date(2026, 10, 18), period_end=date(2026, 10, 29))
+    assert {"weekly_cadence", "report_period_unique"} <= fired(clean, quality.WARN)
+
+
+def test_quality_volume_dip_compares_newest_week_with_recent_ones(clean):
+    for w in range(1, 6):
+        _other_report(clean, f"u/{w}", date(2026, 11, 1) - timedelta(days=7 * w), parsed=6)
+    assert "weekly_volume_dip" not in fired(clean, quality.WARN)
+    clean.execute("UPDATE auditor_report SET parsed_rows = 20 WHERE report_url LIKE 'u/%'")
+    assert "weekly_volume_dip" in fired(clean, quality.WARN)
+
+
+def test_quality_zillow_jump_warns(clean):
+    clean.execute("UPDATE zillow_zhvi SET zhvi = zhvi * 2 WHERE month = (SELECT MAX(month) FROM zillow_zhvi)")
+    assert "zillow_monthly_change" in fired(clean, quality.WARN)
+
+
+def test_quality_known_exception_is_left_out(clean, monkeypatch):
+    clean.execute("UPDATE auditor_report SET reported_count = 99")
+    monkeypatch.setitem(quality.KNOWN, "published_count_matches", {WHSR_URL: "checked"})
+    assert "published_count_matches" not in fired(clean, quality.FAIL)
+
+
+def test_quality_redfin_only_checked_once_loaded(clean):
+    assert fired(clean, quality.FAIL) == set()  # no Redfin table yet
+    redfin.load(clean, file=str(FX / "redfin_weekly.tsv"))
+    assert fired(clean, quality.FAIL) == set()
+    clean.execute(f"UPDATE TOP (1) {redfin.TABLE} SET region_name = 'Fairfield County, OH'")
+    assert "redfin_regions" in fired(clean, quality.FAIL)
+
+
+def test_quality_redfin_date_column_that_isnt_a_date(clean):
+    redfin.load(clean, file=str(FX / "redfin_weekly.tsv"))
+    clean.execute(f"UPDATE TOP (1) {redfin.TABLE} SET period_begin = '1970-01-01'")
+    assert "redfin_dates" in fired(clean, quality.FAIL)
+
+
+def test_zillow_refuses_a_file_much_smaller_than_what_is_loaded(clean, tmp_path):
+    before = rows(clean, "SELECT COUNT(*) FROM zillow_zhvi")
+    lines = (FX / "zillow_county.csv").read_text().splitlines()
+    cut = tmp_path / "cut.csv"
+    cut.write_text("\n".join(x for x in lines if "Licking" not in x) + "\n")
+    with pytest.raises(ValueError, match="cut off"):
+        zillow.load(clean, "county", file=str(cut))
+    assert rows(clean, "SELECT COUNT(*) FROM zillow_zhvi") == before
+
+
+def test_county_file_fails_when_land_use_filter_keeps_nothing(tmp_path):
+    f = tmp_path / "tax.csv"
+    f.write_text("Parcel,Sale Date,Sale Price,Tax Class\n1,10/01/2026,100000,1\n")
+    with pytest.raises(ValueError, match="no residential rows"):
+        county_file.parse(f)
+
+
+def _script(path, name):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).parent.parent / path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("check_fails", [True, False])
+def test_weekly_skips_databricks_only_when_the_data_check_fails(monkeypatch, tmp_path, check_fails):
+    weekly = _script("scripts/weekly.py", "weekly_under_test")
+    monkeypatch.setattr(weekly, "LOGS", tmp_path)
+    ran = []
+
+    def fake_run(cmd, **_):
+        script = " ".join(cmd[1:])
+        ran.append(script)
+        return SimpleNamespace(returncode=1 if check_fails and script == "run.py check" else 0)
+
+    monkeypatch.setattr(weekly.subprocess, "run", fake_run)
+    assert weekly.main() == (1 if check_fails else 0)
+    assert "run.py backup" in ran  # the backup runs either way
+    assert ("databricks/land_sql_tables.py" in ran) is (not check_fails)
+    assert ("skipped" in (tmp_path / "last_run.txt").read_text()) is check_fails
+
+
+def test_run_check_exits_nonzero_on_a_failed_rule_but_not_a_warning(clean):
+    cli = _script("run.py", "run_under_test")
+    assert cli.main(["check", "--db", TEST_DB]) == 0
+    clean.execute("UPDATE TOP (1) auditor_sale SET zip = '46026'")
+    clean.commit()
+    assert cli.main(["check", "--db", TEST_DB]) == 0
+    clean.execute("UPDATE auditor_report SET parsed_rows = 0")
+    clean.commit()
+    assert cli.main(["check", "--db", TEST_DB]) == 1
+
+
+def test_reconcile_reports_only_real_differences():
+    rec = _script("databricks/reconcile.py", "reconcile_under_test")
+    assert rec.differences("sales", (12038, 4419988341, date(2026, 4, 3)),
+                           ["12038", "4419988341", "2026-04-03"]) == []
+    assert rec.differences("sales", (12038,), ["12037"]) == [
+        "sales: SQL Server ['12038'], Databricks ['12037']"]

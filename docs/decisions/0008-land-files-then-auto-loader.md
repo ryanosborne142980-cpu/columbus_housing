@@ -26,11 +26,13 @@ and validates the county data.
 
 - **Files are kept twice,** locally in `data/landing/` and in the volume, so this source could be replayed, though that is untested.
 - **Auto Loader's file tracking replaces custom code** for skipping processed files. A second run added no rows.
-- **SQL Server is still the source for county data.** Databricks only sees it after a landing run, and nothing
-  automatically reconciles the two.
+- **SQL Server is still the source for county data.** Databricks only sees it after a landing run.
+  `reconcile.py` compares the two at the end of the weekly job.
 - **A re-parsed report is exported again,** because its `fetched_at` changes. Bronze keeps both versions, and silver
   has to pick the latest.
 - **Each monthly Zillow file repeats its full history,** so bronze will hold repeated rows by design. Silver has to
   pick the latest release.
+- **Silver repeats SQL Server's cleaning rules,** so the two have to be changed together. They currently match on every
+  total and weekly median checked.
 - **This runs on Free Edition.** That shows familiarity with the tools, not production experience, and Free Edition
   isn't for commercial use.
