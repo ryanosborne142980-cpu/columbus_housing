@@ -34,6 +34,7 @@ URLS = {
     "zip": _BASE + "Zip_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv",
 }
 COUNTIES = ("Franklin County", "Delaware County", "Licking County")
+MIN_KEEP_RATIO = 0.95  # each file holds full history, so it shouldn't be much smaller than the last
 
 
 def parse(buf: bytes | Path, kind: str) -> pd.DataFrame:
@@ -90,6 +91,10 @@ def load(con, kind: str, *, file: str | None = None, url: str | None = None) -> 
         buf = r.content
 
     df = parse(buf, kind)
+    existing = con.execute("SELECT COUNT(*) FROM zillow_zhvi WHERE region_type = ?", kind).fetchone()[0]
+    if len(df) < MIN_KEEP_RATIO * existing:
+        raise ValueError(f"zillow {kind}: file has {len(df)} rows but {existing} are loaded; "
+                         "it may be cut off, so nothing was replaced.")
     # Zillow revises history every month, so each load replaces this kind's rows wholesale.
     cur = con.cursor()
     cur.execute("DELETE FROM zillow_zhvi WHERE region_type = ?", kind)

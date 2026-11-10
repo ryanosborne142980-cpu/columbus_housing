@@ -6,14 +6,19 @@ How to run the pipeline, check that it worked, and recover when it didn't. Run c
 
 | Source | Published | Command | When to run |
 |---|---|---|---|
-| Franklin County | Sundays | `python run.py all --commercial` | Weekly, Monday morning |
+| Weekly job (Franklin, backup, Databricks) | Sundays | `python scripts/weekly.py` | Mondays |
 | Zillow | 16th of the month | `python run.py zillow` | Monthly, after the 16th |
 | Redfin | Thursdays | `python run.py redfin --file <download>` | When you download a new file |
-| Database backup | n/a | `python run.py backup` | After each load, until scheduled |
-| Databricks bronze | n/a | See [databricks/](../databricks/README.md) | After each load |
 | Delaware, Licking | On request | `python run.py county-file --county <name> --file <file>` | When you receive a file |
 
-`all` loads Franklin and prints the report. It skips Redfin unless you pass `--file` or `--url`.
+Register the Monday task once with `powershell -ExecutionPolicy Bypass -File scripts\register_weekly_task.ps1`. It runs
+only while you're logged on, and catches up the next time the laptop is on if it missed a Monday. Open a new terminal
+first if `COLUMBUS_HOUSING_SERVER` or the Databricks CLI was set up recently, because the task needs both.
+
+Each run writes a log to `data/logs/` and its outcome to `data/logs/last_run.txt`. A failed run also shows as a
+non-zero last result in Task Scheduler. Nothing sends an alert, so look at one of those.
+
+`run.py all` loads Franklin and prints the report. It skips Redfin unless you pass `--file` or `--url`.
 
 By default it looks back 56 days. After a longer gap, add `--since <date>`.
 
@@ -30,42 +35,41 @@ auditor: {'reports': 1, 'new_rows': 340, 'skipped': 8}
 
 - **`reports` of 1 or more:** new pages were loaded.
 - **`reports` of 0 with `skipped` above 0:** normal if nothing new has been published.
-- **`reports` and `skipped` both 0:** discovery found nothing. See the table below.
+- **`reports` and `skipped` both 0:** discovery found nothing. See the table below. `run.py` exits non-zero for this,
+  for a page that couldn't be fetched, and when the newest week is over 14 days old.
 - **A `failed` key:** some pages couldn't be fetched. Re-run; it's safe.
 
 Pages that return an error status are logged as `WARNING HTTP ...` but aren't counted in these numbers, so
 read the warnings too.
 
-Then run these checks. The first three should return no rows:
+Then run the data checks. The weekly job does this after loading:
 
-```sql
--- Parsed count differs from the county's own count.
-SELECT report_url, reported_count, parsed_rows, diff FROM v_report_validation WHERE diff <> 0;
-
--- Report has no week or no sales.
-SELECT report_url FROM auditor_report WHERE period_start IS NULL OR parsed_rows = 0;
-
--- Sale has no ZIP.
-SELECT TOP 20 parcel_id, sale_date, report_url FROM auditor_sale WHERE zip IS NULL;
-
--- Newest week loaded. Should end within about 11 days of today.
-SELECT MAX(period_end) FROM auditor_report;
+```bash
+python run.py check
 ```
 
-`v_report_validation` leaves out reports with no county summary, so it can't vouch for them:
+The rules are in [pipeline/quality.py](../pipeline/quality.py). `FAIL` means the data is wrong or incomplete: the
+command exits 1, and the weekly job skips its Databricks steps but still backs up. Fix the data or the parser, then
+re-run `scripts/weekly.py`. `WARN` is for review and blocks nothing.
 
-```sql
-SELECT report_url, period_start, parsed_rows FROM auditor_report WHERE reported_count IS NULL;
-```
+If a failure turns out to be correct as published, add it to `KNOWN` in `quality.py` with what you found.
 
-Expected exceptions:
+Expected as of 2026-11-06:
 
-- **Week of Sep 4, 2026 (`diff` of -1):** the page lists 336 parcels, but its summary says 337. The county's
-  number is wrong.
-- **Nine April/May 2026 reports with no summary (5 residential, 4 commercial):** the pages don't include one.
-  Their parsed counts were checked against the parcel numbers on each page instead.
-- **Some report weeks look odd, such as Jun 20 – 26, 2026:** the county's page gives two different ranges. The
-  summary views use each sale's own date, not the report's week.
+- **Week of Sep 4, 2026:** the page lists 336 parcels, but its summary says 337. In `KNOWN`.
+- **ZIP 46026 (parcel 053-001136-00):** the county's page files the sale under that ZIP. Most sales in that parcel range
+  are in 43026, so it's probably a typo, but the data is left as published. In `KNOWN`.
+- **$13.1M at 5681 Rager Rd:** warns as a high residential price. The county's page shows that price, but whether it's
+  a house hasn't been checked.
+- **Three reports with a 6-day week, and two commercial reports giving Jun 5 - 11:** warn. `20260621-WCSR` also accounts
+  for 18 of the sales outside their report's week. The summary views use each sale's own date, not the report's week.
+- **Nine sales dated Jun 12 in `20260614-WHSR`:** warn as outside that report's Jun 5 - 11 week.
+- **Nine April/May 2026 reports with no summary (5 residential, 4 commercial):** the pages don't include one. The
+  `parsed_matches_page` rule compares them with the parcel IDs in the saved page instead.
+
+Reports were published exactly 7 days apart across all 59, so these date oddities don't mean a week is missing.
+
+After landing, `python databricks/reconcile.py` checks that silver matches SQL Server. It also runs in the weekly job.
 
 ## When something fails
 
@@ -125,8 +129,9 @@ was tested on 2026-11-04: every table count matched, and `raw_page` matched on t
 
 As of 2026-11-04. Move these to issues as they get scheduled.
 
-- **The weekly job isn't scheduled.** It only runs by hand. Set up Windows Task Scheduler with the repo root
-  as the working directory, and make sure the task can see `COLUMBUS_HOUSING_SERVER`.
-- **Backups aren't scheduled.** They only run when someone runs `python run.py backup`.
+- **Nothing alerts you to a failed run.** You have to check `last_run.txt` or Task Scheduler.
+- **The weekly task only runs while you're logged on, and the laptop can sleep mid-run.** It went into standby during a
+  test on 2026-11-04. Plug in and keep it awake on Monday mornings, or check `last_run.txt` afterward.
+- **Discovery can miss a report dated over a day from its Sunday.** Compare the listing's count with what's loaded.
 - **Redfin, Delaware and Licking aren't loaded.** All three need a file obtained by hand.
 - **Franklin year-over-year isn't available yet.** It needs a year of captured weeks. Zillow covers the gap.

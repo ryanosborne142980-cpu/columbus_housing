@@ -320,6 +320,8 @@ def run(con, since: date, report_types=("residential",), refetch=False) -> dict:
                 continue
             if r.status_code != 200:
                 log.warning("HTTP %s for %s", r.status_code, url)
+                stats.setdefault("failed", 0)
+                stats["failed"] += 1
                 continue
             # Save the page before parsing, so a parser crash still keeps the raw HTML.
             db.save_raw(con, url, r.text, r.status_code)
@@ -329,6 +331,19 @@ def run(con, since: date, report_types=("residential",), refetch=False) -> dict:
             stats["reports"] += 1
             log.info("%s: %s rows (%s to %s)", url, len(rep.sales), rep.period_start, rep.period_end)
     return stats
+
+
+def run_problems(con, stats: dict, today: date | None = None, max_age_days: int = 14) -> list[str]:
+    """Why a run should count as failed, even though it finished. Empty if it looks healthy."""
+    problems = []
+    if stats.get("failed"):
+        problems.append(f"{stats['failed']} report pages couldn't be fetched")
+    if not stats["reports"] and not stats["skipped"]:
+        problems.append("discovery found no reports")
+    newest = con.execute("SELECT MAX(period_end) FROM auditor_report WHERE county = 'Franklin'").fetchone()[0]
+    if newest is None or ((today or date.today()) - newest).days > max_age_days:
+        problems.append(f"newest Franklin week ended {newest}, more than {max_age_days} days ago")
+    return problems
 
 
 def load_url(con, url: str) -> int:

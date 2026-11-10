@@ -78,6 +78,9 @@ def parse(path: Path) -> list[dict]:
         before = len(df)
         df = df[df[cm["land_use"]].map(_is_residential)]
         log.info("%s: kept %s of %s rows as residential", path.name, len(df), before)
+        if before and df.empty:
+            raise ValueError(f"{path.name}: no residential rows out of {before}. Is "
+                             f"{cm['land_use']!r} really the land use column? Columns: {list(df.columns)}")
 
     dates = pd.to_datetime(df[cm["sale_date"]], errors="coerce")
     prices = pd.to_numeric(df[cm["sale_price"]].str.replace(r"[^\d.]", "", regex=True),

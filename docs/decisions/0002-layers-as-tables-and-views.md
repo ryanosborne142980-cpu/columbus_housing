@@ -28,4 +28,5 @@ Never attach Redfin or Zillow figures to individual sales. No cross-source view 
 - **Only Franklin can be rebuilt from raw.** Reloading the other sources means keeping or re-obtaining their files.
 - **Changing an existing table needs a manual `ALTER`.** `schema.sql` only creates missing tables.
 
-Revisit this if data volume grows or the pipeline moves to a platform with managed tables.
+Revisit this if data volume grows or the pipeline moves to a platform with managed tables. Databricks now has its own
+bronze and silver tables alongside this; see [decision 0008](0008-land-files-then-auto-loader.md).
