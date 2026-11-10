@@ -64,6 +64,7 @@ Use this when reviewing a pull request, including your own:
 - **Data rules:** are source terms, robots.txt and attribution still respected?
 - **Secrets:** are credentials, personal files and machine-specific names kept out?
 - **Docs:** are the README, runbook and `tests/README.md` still true?
+- **Governance:** does a new column or rule have its row in `docs/governance/`? CI checks that it's there, not that it's right.
 - **Decisions:** if this makes a lasting choice, is there a decision record?
 
 ## Project rules

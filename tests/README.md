@@ -131,6 +131,21 @@ code handles the format we expect; they do not prove the live sources still look
 - **test_reconcile_reports_only_real_differences**: Numbers and dates that match as text aren't reported, and a different
   count is.
 
+### Governance documents (`test_governance.py`, no database needed)
+
+- **test_schema_parser_reads_a_known_table**: Checks the test's own reader of `sql/schema.sql` on two known columns and
+  the table count, so the comparison below can't pass by reading nothing.
+- **test_dictionary_matches_sql_server_schema**: Every column in `sql/schema.sql` is in the data dictionary with the
+  same type, and the dictionary has no column the schema lacks.
+- **test_dictionary_silver_tables_exist_in_the_pipeline**: The silver tables in the dictionary are the ones `silver.py`
+  defines. It checks table names only, not their columns.
+- **test_dictionary_rows_are_complete_and_unique**: No column is listed twice, and each has a description and one of
+  the five classifications.
+- **test_classification_levels_are_all_explained**: Each classification used in the dictionary is described in
+  `classification.md`.
+- **test_rule_catalog_lists_every_rule_and_expectation**: The rule catalog lists exactly the 23 rules in `quality.py`
+  and the expectations in `silver.py`.
+
 ### Exports
 
 - **test_export_only_sends_new_rows**: Exports two sales, finds nothing new on a second run, then exports only a third

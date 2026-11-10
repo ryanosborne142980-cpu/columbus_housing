@@ -18,7 +18,7 @@ GitHub Actions tests every change against a real SQL Server.
 | **Parser check** | 49 of the 50 reports that publish a count match it exactly. The other is the county's miscount: the page lists 336 parcels and its summary says 337. |
 | **Quality gate** | 23 rules in [`pipeline/quality.py`](pipeline/quality.py). A failed rule stops the weekly job before anything lands in Databricks. |
 | **Reconciliation** | Databricks silver matches SQL Server on 12,038 clean sales: row count, price total and date range, with matching medians for all 31 weeks |
-| **Tests** | 55 tests. CI runs them against a SQL Server 2022 container on every pull request. |
+| **Tests** | 61 tests. CI runs them against a SQL Server 2022 container on every pull request. |
 | **Decisions** | 8 short [decision records](docs/decisions/README.md) covering what was chosen and what it costs |
 
 Figures were checked on 2026-11-05 and 2026-11-06. Databricks runs on Free Edition, which shows the tools working
@@ -86,6 +86,7 @@ fails. Zillow's county file reaches the same volume monthly through
 | Lakehouse layers as code | [`bronze.py`](databricks/pipelines/bronze.py), [`silver.py`](databricks/pipelines/silver.py), [`databricks.yml`](databricks/databricks.yml) | Auto Loader into append-only bronze, typed and de-duplicated silver with expectations, all deployed as an asset bundle. |
 | Being a good guest | [`http.py`](pipeline/http.py), [decision 0003](docs/decisions/0003-respect-source-access-rules.md) | Every request honors robots.txt and Crawl-delay, is rate limited per host and backs off on 429 and 503. A source that says no is not worked around. |
 | Testing SQL as SQL | [`ci.yml`](.github/workflows/ci.yml), [decision 0007](docs/decisions/0007-ci-and-branch-protection.md) | Medians, rolling windows and duplicate-safe inserts live in SQL, so tests run against real SQL Server, not a stand-in. `main` takes pull requests only. |
+| Knowing what the data means | [docs/governance/](docs/governance/README.md), [`test_governance.py`](tests/test_governance.py) | A data dictionary, glossary, classification levels, lineage and a rule catalog. CI fails when the dictionary and the schema, or the catalog and the rules, disagree. |
 | How it's operated | [runbook](docs/runbook.md), [CONTRIBUTING.md](CONTRIBUTING.md) | What a healthy run looks like, what each failure means, and how to restore from backup, which has been tested. |
 
 ## Sources
@@ -137,6 +138,7 @@ when CI is green.
 - [CONTRIBUTING.md](CONTRIBUTING.md): workflow, review checklist, adding a data source
 - [docs/runbook.md](docs/runbook.md): running the pipeline, checking results, recovering from failures
 - [docs/decisions/](docs/decisions/README.md): why the pipeline works the way it does
+- [docs/governance/](docs/governance/README.md): what each column means, how sensitive it is, where it comes from and what checks it
 - [databricks/](databricks/README.md): bronze and silver layers with Auto Loader, deployed as an asset bundle
 
 ## Run

@@ -1,0 +1,69 @@
+layer,object,column,type,description,classification
+sql_server,raw_page,id,INT,Surrogate key for one saved copy of a page.,operational
+sql_server,raw_page,url,NVARCHAR(450),Address of the county report page that was fetched.,operational
+sql_server,raw_page,http_status,INT,HTTP status the county site returned.,operational
+sql_server,raw_page,content_sha256,CHAR(64),"Hash of the page content. With url, it stops an unchanged page being saved twice.",operational
+sql_server,raw_page,content,NVARCHAR(MAX),The page exactly as the county published it. The only way to re-parse a week after it leaves the county site.,"public record, not reviewed"
+sql_server,raw_page,fetched_at,DATETIME2(0),"When the page was fetched, in UTC.",operational
+sql_server,auditor_report,report_url,NVARCHAR(450),"Primary key. The report page's address, or file:<county>:<name> for a county export file.",operational
+sql_server,auditor_report,county,NVARCHAR(20),"Franklin, Delaware or Licking.",public record
+sql_server,auditor_report,report_type,NVARCHAR(20),residential or commercial.,public record
+sql_server,auditor_report,period_start,DATE,First day of the week the report covers.,public record
+sql_server,auditor_report,period_end,DATE,Last day of the week the report covers.,public record
+sql_server,auditor_report,published_on,DATE,Date the county published the report.,public record
+sql_server,auditor_report,reported_count,INT,Number of sales the county printed in the report's summary. Compared with parsed_rows to catch parser drift.,public record
+sql_server,auditor_report,reported_median,FLOAT,Median sale price the county printed in the summary.,public record
+sql_server,auditor_report,reported_avg,FLOAT,Average sale price the county printed in the summary.,public record
+sql_server,auditor_report,parsed_rows,INT,Number of sales the parser read from the page.,operational
+sql_server,auditor_report,fetched_at,DATETIME2(0),"When the report was fetched or re-parsed, in UTC. The export to Databricks uses it to find changed reports.",operational
+sql_server,auditor_sale,county,NVARCHAR(20),"Franklin, Delaware or Licking. Part of the primary key.",public record
+sql_server,auditor_sale,parcel_id,NVARCHAR(50),The county's parcel number. Franklin's look like 010-230104-00. Part of the primary key.,"public record, identifies a property"
+sql_server,auditor_sale,sale_date,DATE,Date the sale closed. Part of the primary key.,public record
+sql_server,auditor_sale,sale_price,INT,Sale price in whole dollars. Part of the primary key.,public record
+sql_server,auditor_sale,site_address,NVARCHAR(200),"Street address of the property sold, not the owner's mailing address.","public record, identifies a property"
+sql_server,auditor_sale,zip,NVARCHAR(10),ZIP code of the property.,public record
+sql_server,auditor_sale,report_type,NVARCHAR(20),"residential or commercial, from the report the sale came in.",public record
+sql_server,auditor_sale,report_url,NVARCHAR(450),The report the sale was loaded from. Foreign key to auditor_report.,operational
+sql_server,auditor_sale,loaded_at,DATETIME2(0),"When the row was inserted, in UTC. Exported to Databricks as source_loaded_at.",operational
+sql_server,redfin_load_log,loaded_at,DATETIME2(0),"When a Redfin file was loaded, in UTC.",operational
+sql_server,redfin_load_log,source,NVARCHAR(1000),File or address the Redfin data came from.,operational
+sql_server,redfin_load_log,rows_loaded,INT,Rows kept from that file.,operational
+sql_server,redfin_load_log,columns,NVARCHAR(MAX),"Column names in that file. Redfin's columns vary, so each load records them.",operational
+sql_server,zillow_zhvi,region_type,NVARCHAR(10),county or zip. Part of the primary key.,"licensed, attribution required"
+sql_server,zillow_zhvi,region_name,NVARCHAR(100),"County name such as Franklin County, or a 5-digit ZIP. Part of the primary key.","licensed, attribution required"
+sql_server,zillow_zhvi,county,NVARCHAR(20),"Franklin, Delaware or Licking. For a ZIP, the county Zillow assigns it to.","licensed, attribution required"
+sql_server,zillow_zhvi,month,DATE,First day of the month the value is for. Part of the primary key.,"licensed, attribution required"
+sql_server,zillow_zhvi,zhvi,FLOAT,"Zillow Home Value Index for that region and month, in dollars.","licensed, attribution required"
+sql_server,zillow_load_log,loaded_at,DATETIME2(0),"When a Zillow file was loaded, in UTC.",operational
+sql_server,zillow_load_log,region_type,NVARCHAR(10),county or zip.,operational
+sql_server,zillow_load_log,source,NVARCHAR(1000),File or address the Zillow data came from.,operational
+sql_server,zillow_load_log,last_modified,NVARCHAR(100),Zillow's Last-Modified header for the file. An unchanged value means the load is skipped.,operational
+sql_server,zillow_load_log,rows_loaded,INT,Rows kept from that file.,operational
+sql_server,zillow_load_log,attribution,NVARCHAR(400),"The credit line Zillow requires, stored with each load.",operational
+silver,silver_sale,county,STRING,"Franklin, Delaware or Licking.",public record
+silver,silver_sale,sale_date,DATE,Date the sale closed.,public record
+silver,silver_sale,sale_price,INT,"Sale price in whole dollars. Always 10,000 or more here.",public record
+silver,silver_sale,zip,STRING,ZIP code of the property. Can be null; the has_zip rule counts those rows.,public record
+silver,silver_sale,parcel_id,STRING,The lowest parcel number on the deed. A deed covering several parcels is one row.,"public record, identifies a property"
+silver,silver_sale,site_address,STRING,Street address of the property sold.,"public record, identifies a property"
+silver,silver_sale,parcel_count,BIGINT,Number of parcels on the deed. Above 1 means a multi-parcel sale.,public record
+silver,silver_sale,week_start,DATE,Monday of the week the sale closed in.,public record
+silver,silver_sale,month,STRING,"Month the sale closed in, as YYYY-MM.",public record
+silver,silver_report,report_url,STRING,"The report page's address, or file:<county>:<name> for a county export file. One row per value.",operational
+silver,silver_report,county,STRING,"Franklin, Delaware or Licking.",public record
+silver,silver_report,report_type,STRING,residential or commercial.,public record
+silver,silver_report,period_start,DATE,First day of the week the report covers. Can be null; the has_period rule counts those rows.,public record
+silver,silver_report,period_end,DATE,Last day of the week the report covers.,public record
+silver,silver_report,published_on,DATE,Date the county published the report.,public record
+silver,silver_report,reported_count,INT,Number of sales the county printed in the report's summary.,public record
+silver,silver_report,reported_median,STRING,Median sale price the county printed. Still a string: silver doesn't cast it.,public record
+silver,silver_report,reported_avg,STRING,Average sale price the county printed. Still a string: silver doesn't cast it.,public record
+silver,silver_report,parsed_rows,INT,Number of sales the parser read from the page.,operational
+silver,silver_report,fetched_at,TIMESTAMP,When SQL Server fetched or re-parsed the report. The newest value per report_url wins.,operational
+silver,silver_report,source_file,STRING,Path of the landed file the row came from.,operational
+silver,silver_report,source_modified_at,TIMESTAMP,Modification time of that file in the volume.,operational
+silver,silver_report,loaded_at,TIMESTAMP,When bronze loaded the row.,operational
+silver,silver_zillow_county,region_name,STRING,"County name as Zillow writes it, such as Franklin County.","licensed, attribution required"
+silver,silver_zillow_county,county,STRING,"Franklin, Delaware or Licking.","licensed, attribution required"
+silver,silver_zillow_county,month,DATE,First day of the month the value is for.,"licensed, attribution required"
+silver,silver_zillow_county,zhvi,DOUBLE,"Zillow Home Value Index for that county and month, in dollars, from the latest release.","licensed, attribution required"
