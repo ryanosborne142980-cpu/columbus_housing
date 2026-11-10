@@ -2,6 +2,10 @@
 
 silver_sale applies the same rules as SQL Server's v_sale_clean, so the two can be compared.
 Bronze keeps every version of a row, so each table here picks the latest one.
+
+The date and price rules sit on sale_typed, a view that silver_sale reads. They have to run before
+silver_sale's price floor: a price that didn't parse is null, the floor removes it, and a rule placed
+after the floor would count nothing.
 """
 import dlt
 from pyspark.sql import Window
@@ -15,23 +19,31 @@ def _latest(df, keys, order):
     return df.withColumn("_rn", F.row_number().over(window)).filter("_rn = 1").drop("_rn")
 
 
-@dlt.table(
-    name="silver_sale",
-    comment="Residential sales of $10k or more, with multi-parcel deeds counted once.",
+@dlt.view(
+    name="sale_typed",
+    comment="Every sale, typed, latest version of each. Rows with no usable date or price stop here.",
 )
 @dlt.expect_or_drop("has_sale_date", "sale_date IS NOT NULL")
 @dlt.expect_or_drop("has_sale_price", "sale_price IS NOT NULL")
-@dlt.expect("has_zip", "zip IS NOT NULL")
-def silver_sale():
+def sale_typed():
     typed = (
         spark.read.table("bronze_auditor_sale")  # noqa: F821 (provided by the pipeline runtime)
         .withColumn("sale_date", F.to_date("sale_date"))
         .withColumn("sale_price", F.col("sale_price").cast("int"))
     )
     # One row per sale key, as in SQL Server's primary key.
-    latest = _latest(typed, ["county", "parcel_id", "sale_date", "sale_price"], "source_loaded_at")
+    return _latest(typed, ["county", "parcel_id", "sale_date", "sale_price"], "source_loaded_at")
+
+
+@dlt.table(
+    name="silver_sale",
+    comment="Residential sales of $10k or more, with multi-parcel deeds counted once.",
+)
+@dlt.expect("has_zip", "zip IS NOT NULL")
+def silver_sale():
     return (
-        latest.filter("report_type = 'residential' AND sale_price >= 10000")
+        spark.read.table("sale_typed")  # noqa: F821
+        .filter("report_type = 'residential' AND sale_price >= 10000")
         .withColumn("_addr", F.coalesce("site_address", "parcel_id"))
         .groupBy("county", "sale_date", "sale_price", "_addr", "zip")
         .agg(

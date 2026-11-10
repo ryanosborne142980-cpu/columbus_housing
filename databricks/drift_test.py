@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from run_pipeline import run
@@ -27,6 +28,8 @@ SALE = "county,parcel_id,sale_date,sale_price,site_address,zip,report_type,repor
 REPORT = ("report_url,county,report_type,period_start,period_end,published_on,reported_count,"
           "reported_median,reported_avg,parsed_rows,fetched_at")
 ZILLOW = "RegionID,SizeRank,RegionName,RegionType,StateName,State,Metro,StateCodeFIPS,MunicipalCodeFIPS"
+EVENT_LOG_POLLS = 6
+EVENT_LOG_SECONDS = 10
 results = []
 warehouse = None
 
@@ -72,6 +75,27 @@ def check(name, got, want):
     ok = str(got) == str(want)
     results.append(ok)
     print(f"  {'PASS' if ok else 'FAIL'} {name}: got {got}" + ("" if ok else f", wanted {want}"), flush=True)
+
+
+def dropped(rule):
+    """Rows the newest update dropped for one rule, read from the pipeline's event log table."""
+    counts = "array<struct<name:string,dataset:string,passed_records:bigint,failed_records:bigint>>"
+    stmt = (
+        f"WITH latest AS (SELECT origin.update_id AS id FROM {S}pipeline_event_log "
+        "WHERE event_type = 'create_update' ORDER BY timestamp DESC LIMIT 1) "
+        "SELECT COALESCE(SUM(e.failed_records), 0) FROM (SELECT explode(from_json("
+        f"details:flow_progress.data_quality.expectations::string, '{counts}')) AS e "
+        f"FROM {S}pipeline_event_log, latest "
+        "WHERE event_type = 'flow_progress' AND origin.update_id = latest.id) "
+        f"WHERE e.name = '{rule}'"
+    )
+    got = one(stmt)
+    for _ in range(EVENT_LOG_POLLS):  # the log can trail the update by a few seconds
+        if str(got) != "0":
+            break
+        time.sleep(EVENT_LOG_SECONDS)
+        got = one(stmt)
+    return got
 
 
 def sale(parcel, date, price, addr, zip_code, kind="residential", extra=""):
@@ -160,6 +184,9 @@ def stage4():
     check("silver drops the three bad rows", count("silver_sale", "parcel_id LIKE 'B-%'"), 1)
     kept = one(f"SELECT parcel_id FROM {S}silver_sale WHERE zip IS NULL")
     check("silver keeps the row with no ZIP", kept, "B-4")
+    # The rules themselves have to count these rows. Before, the price floor removed B-3 first.
+    check("has_sale_date dropped the two rows with no usable date", dropped("has_sale_date"), 2)
+    check("has_sale_price dropped the row with a bad price", dropped("has_sale_price"), 1)
 
 
 if __name__ == "__main__":
