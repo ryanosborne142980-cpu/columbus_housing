@@ -1,0 +1,39 @@
+name: Profile sync
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.lock"
+      - ".github/**"
+      - "tests/**"
+
+env:
+  OWNER: ryanosborne142980-cpu
+  TARGETS: "ryanosborne142980-cpu ryanosborne142980-cpu.github.io"
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Open a Copilot-assigned issue in each target repo
+        env:
+          # Fine-grained PAT: Issues (rw) + Metadata on both target repos,
+          # plus the permissions required to assign Copilot (Actions, Contents, Pull requests rw)
+          GH_TOKEN: ${{ secrets.PROFILE_SYNC_TOKEN }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          title="Profile sync: ${REPO##*/} @ ${SHA::7}"
+          body=$(printf 'Source commit: https://github.com/%s/commit/%s\n\nMessage:\n%s\n\nFollow .github/agents/profile-sync.agent.md. If no update is needed, comment why and close this issue.' "$REPO" "$SHA" "$MSG")
+          for t in $TARGETS; do
+            # Skip if an issue for this commit already exists (re-runs)
+            if gh issue list -R "$OWNER/$t" --state all --search "\"@ ${SHA::7}\" in:title" --json number --jq 'length' | grep -qv '^0$'; then
+              continue
+            fi
+            gh issue create -R "$OWNER/$t" --title "$title" --body "$body" --assignee "@copilot"
+          done
