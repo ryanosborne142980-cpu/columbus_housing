@@ -15,21 +15,26 @@ def _latest(df, keys, order):
     return df.withColumn("_rn", F.row_number().over(window)).filter("_rn = 1").drop("_rn")
 
 
-@dlt.table(
-    name="silver_sale",
-    comment="Residential sales of $10k or more, with multi-parcel deeds counted once.",
-)
+@dlt.view(name="silver_sale_typed", comment="Latest version of each sale, typed, before any filtering.")
 @dlt.expect_or_drop("has_sale_date", "sale_date IS NOT NULL")
 @dlt.expect_or_drop("has_sale_price", "sale_price IS NOT NULL")
-@dlt.expect("has_zip", "zip IS NOT NULL")
-def silver_sale():
+def silver_sale_typed():
     typed = (
         spark.read.table("bronze_auditor_sale")  # noqa: F821 (provided by the pipeline runtime)
         .withColumn("sale_date", F.to_date("sale_date"))
         .withColumn("sale_price", F.col("sale_price").cast("int"))
     )
     # One row per sale key, as in SQL Server's primary key.
-    latest = _latest(typed, ["county", "parcel_id", "sale_date", "sale_price"], "source_loaded_at")
+    return _latest(typed, ["county", "parcel_id", "sale_date", "sale_price"], "source_loaded_at")
+
+
+@dlt.table(
+    name="silver_sale",
+    comment="Residential sales of $10k or more, with multi-parcel deeds counted once.",
+)
+@dlt.expect("has_zip", "zip IS NOT NULL")
+def silver_sale():
+    latest = dlt.read("silver_sale_typed")
     return (
         latest.filter("report_type = 'residential' AND sale_price >= 10000")
         .withColumn("_addr", F.coalesce("site_address", "parcel_id"))

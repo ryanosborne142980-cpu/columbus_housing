@@ -66,7 +66,9 @@ On Databricks Free Edition, 2026-11-04:
 - **A second Zillow file.** Each monthly file holds Zillow's full history, so bronze will repeat every region.
   Silver is written to pick the latest release, but no second release has arrived to prove it.
 - **Silver's latest-version logic on real repeats.** Every row has only one version so far.
-- **Data quality rules dropping a bad row.** No bad row has been supplied to them yet.
+- **Data quality rules dropping a bad row.** `has_sale_date` and `has_sale_price` now run on `silver_sale_typed`,
+  before the residential and price filter, so they should count the bad rows in stage 4 of `drift_test.py`
+  (expected: 2 and 1). That run hasn't been done yet.
 - **Replay from the volume.**
 - **A later batch of new rows on real data.** Only a test on sample rows has covered that so far.
 
