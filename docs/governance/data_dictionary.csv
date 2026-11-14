@@ -1,0 +1,64 @@
+layer,table,column,type,classification,meaning
+sql,raw_page,id,INT,Public,Surrogate key for a saved page version.
+sql,raw_page,url,NVARCHAR(450),Public,Address of the county report page that was fetched.
+sql,raw_page,http_status,INT,Public,HTTP status returned when the page was fetched.
+sql,raw_page,content_sha256,CHAR(64),Public,SHA-256 of the page content; a refetch adds a row only when this changes.
+sql,raw_page,content,NVARCHAR(MAX),Restricted,"The county page exactly as published. Not reviewed for personal fields beyond the four parsed columns; see classification.md."
+sql,raw_page,fetched_at,DATETIME2(0),Internal,UTC time the page version was saved.
+sql,auditor_report,report_url,NVARCHAR(450),Public,"Page URL, or file:<county>:<name> for a county export. Primary key."
+sql,auditor_report,county,NVARCHAR(20),Public,"Franklin, Delaware or Licking."
+sql,auditor_report,report_type,NVARCHAR(20),Public,residential or commercial.
+sql,auditor_report,period_start,DATE,Public,First day of the week the report covers.
+sql,auditor_report,period_end,DATE,Public,Last day of the week the report covers.
+sql,auditor_report,published_on,DATE,Public,Date the county published the report.
+sql,auditor_report,reported_count,INT,Public,Sale count printed on the county's own report; used to validate parsing.
+sql,auditor_report,reported_median,FLOAT,Public,Median price printed on the county's own report.
+sql,auditor_report,reported_avg,FLOAT,Public,Average price printed on the county's own report.
+sql,auditor_report,parsed_rows,INT,Internal,Number of sale rows this pipeline parsed from the report.
+sql,auditor_report,fetched_at,DATETIME2(0),Internal,UTC time the report row was loaded.
+sql,auditor_sale,county,NVARCHAR(20),Public,"Franklin, Delaware or Licking. Part of the primary key."
+sql,auditor_sale,parcel_id,NVARCHAR(50),Public,"County parcel number; Franklin uses 123-456789-00. Part of the primary key."
+sql,auditor_sale,sale_date,DATE,Public,Date of the sale. Part of the primary key.
+sql,auditor_sale,sale_price,INT,Public,Price in whole dollars. Part of the primary key.
+sql,auditor_sale,site_address,NVARCHAR(200),Confidential,Street address of the property sold. Identifies a home.
+sql,auditor_sale,zip,NVARCHAR(10),Public,ZIP code of the property.
+sql,auditor_sale,report_type,NVARCHAR(20),Public,residential or commercial; must match the report.
+sql,auditor_sale,report_url,NVARCHAR(450),Public,Report the sale came from; foreign key to auditor_report.
+sql,auditor_sale,loaded_at,DATETIME2(0),Internal,UTC time the sale row was loaded.
+sql,redfin_load_log,loaded_at,DATETIME2(0),Internal,UTC time of the Redfin load.
+sql,redfin_load_log,source,NVARCHAR(1000),Internal,File or URL the Redfin data came from.
+sql,redfin_load_log,rows_loaded,INT,Internal,Rows loaded into redfin_columbus_weekly.
+sql,redfin_load_log,columns,NVARCHAR(MAX),Internal,Columns present in that Redfin file; they vary between releases.
+sql,zillow_zhvi,region_type,NVARCHAR(10),Public,county or zip. Part of the primary key.
+sql,zillow_zhvi,region_name,NVARCHAR(100),Public,"County name (""Franklin County"") or 5-digit ZIP. Part of the primary key."
+sql,zillow_zhvi,county,NVARCHAR(20),Public,"Franklin, Delaware or Licking; for ZIPs, Zillow's county for that ZIP."
+sql,zillow_zhvi,month,DATE,Public,First day of the month. Part of the primary key.
+sql,zillow_zhvi,zhvi,FLOAT,Public,"Zillow Home Value Index for the month. Source: Zillow Group; attribution required."
+sql,zillow_load_log,loaded_at,DATETIME2(0),Internal,UTC time of the Zillow load.
+sql,zillow_load_log,region_type,NVARCHAR(10),Internal,county or zip.
+sql,zillow_load_log,source,NVARCHAR(1000),Internal,File or URL the Zillow data came from.
+sql,zillow_load_log,last_modified,NVARCHAR(100),Internal,Last-Modified header of the source file; lets the loader skip unchanged files.
+sql,zillow_load_log,rows_loaded,INT,Internal,Rows loaded.
+sql,zillow_load_log,attribution,NVARCHAR(400),Internal,Attribution text that must accompany the data.
+silver,silver_sale,county,string,Public,"Franklin, Delaware or Licking."
+silver,silver_sale,sale_date,date,Public,Typed sale date.
+silver,silver_sale,sale_price,int,Public,Typed sale price; at least $10 000 here.
+silver,silver_sale,zip,string,Public,ZIP code of the property.
+silver,silver_sale,parcel_id,string,Public,Lowest parcel ID among parcels on one deed.
+silver,silver_sale,site_address,string,Confidential,Lowest site address among parcels on one deed.
+silver,silver_sale,parcel_count,bigint,Internal,Number of parcels on the deed counted as one sale.
+silver,silver_sale,week_start,date,Public,Monday of the sale's week.
+silver,silver_sale,month,string,Public,Sale month as YYYY-MM.
+silver,silver_report,report_url,string,Public,Report page URL or file: reference.
+silver,silver_report,county,string,Public,County of the report.
+silver,silver_report,report_type,string,Public,residential or commercial.
+silver,silver_report,period_start,date,Public,First day of the week covered.
+silver,silver_report,period_end,date,Public,Last day of the week covered.
+silver,silver_report,published_on,date,Public,Date the county published the report.
+silver,silver_report,reported_count,int,Public,Sale count printed on the county's report.
+silver,silver_report,parsed_rows,int,Internal,Rows this pipeline parsed.
+silver,silver_report,fetched_at,timestamp,Internal,Time the latest version of the report was fetched.
+silver,silver_zillow_county,region_name,string,Public,County name as Zillow gives it.
+silver,silver_zillow_county,county,string,Public,County name without the word County.
+silver,silver_zillow_county,month,date,Public,First day of the month.
+silver,silver_zillow_county,zhvi,double,Public,"Zillow Home Value Index. Source: Zillow Group; attribution required."
